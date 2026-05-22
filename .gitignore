@@ -1,15 +1,6 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# PyInstaller / Build artifacts
 build/
 dist/
+__pycache__/
 *.spec
 *.exe
-
-# Temporary files & Scratch directories
-scratch/
-.idea/
-.vscode/
+config.json
