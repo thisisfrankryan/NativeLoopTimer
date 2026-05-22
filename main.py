@@ -425,6 +425,7 @@ class TimerApp:
         self.task_status_badges = {}
         self.task_progress_bars = {}
         self.task_hourglasses = {}
+        self.task_card_widgets = {}
         self.pip_window = None
         
         # Paths
@@ -957,10 +958,10 @@ class TimerApp:
         )
         self.task_list_frame.pack(fill="both", expand=True, pady=0)
         
-        # Bind canvas configuration to auto-adjust scrollbar visibility dynamically
+        # Bind canvas configuration to auto-adjust grid layout columns and scrollbar dynamically
         self.task_list_frame._parent_canvas.bind(
             "<Configure>", 
-            lambda e: self.root.after(10, self.adjust_scrollbar_visibility), 
+            self.on_list_frame_configure, 
             add="+"
         )
         
@@ -1447,6 +1448,46 @@ class TimerApp:
         except Exception as e:
             print(f"[Scrollbar] Error adjusting scrollbar: {e}")
 
+    def on_list_frame_configure(self, event):
+        new_width = event.width
+        if getattr(self, "_last_list_width", 0) != new_width:
+            self._last_list_width = new_width
+            self.root.after(50, self.relayout_task_cards)
+
+    def relayout_task_cards(self):
+        if not self.root or not self.root.winfo_exists():
+            return
+            
+        width = self.task_list_frame._parent_canvas.winfo_width()
+        if width <= 200:
+            cols = 1
+        elif width >= 1050:
+            cols = 3
+        elif width >= 680:
+            cols = 2
+        else:
+            cols = 1
+            
+        with self.lock:
+            tasks_copy = list(self.tasks)
+            
+        for c in range(10):
+            self.task_list_frame.grid_columnconfigure(c, weight=0, minsize=0)
+            
+        for c in range(cols):
+            self.task_list_frame.grid_columnconfigure(c, weight=1, minsize=320)
+            
+        for idx, task in enumerate(tasks_copy):
+            task_id = task["id"]
+            card = self.task_card_widgets.get(task_id)
+            if card and card.winfo_exists():
+                r = idx // cols
+                c = idx % cols
+                card.pack_forget()
+                card.grid(row=r, column=c, padx=8, pady=8, sticky="nsew")
+                
+        self.adjust_scrollbar_visibility()
+
     def on_start_clicked(self):
         """Validates inputs, appends a new task profile, and saves config."""
         current_tab = self.segmented_button.get()
@@ -1548,6 +1589,7 @@ class TimerApp:
         self.task_status_badges = {}
         self.task_hourglasses = {}
         self.task_progress_bars = {}
+        self.task_card_widgets = {}
         
         with self.lock:
             tasks_copy = list(self.tasks)
@@ -1574,7 +1616,7 @@ class TimerApp:
                 border_width=1, 
                 border_color="#334155"
             )
-            card.pack(fill="x", padx=5, pady=4)
+            self.task_card_widgets[task_id] = card
             
             card.grid_columnconfigure(0, weight=0) # Badge
             card.grid_columnconfigure(1, weight=1) # Icon + Name
@@ -1680,6 +1722,9 @@ class TimerApp:
             progress_bar.set(1.0)
             self.task_progress_bars[task_id] = progress_bar
             
+        # Position cards using the dynamic multi-column grid layout
+        self.relayout_task_cards()
+
         # Request immediate visual redraw of ticking components
         self.tick_gui_status()
         
