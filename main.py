@@ -13,6 +13,12 @@ import pystray
 import customtkinter as ctk
 import tkinter as tk
 
+try:
+    import pywinstyles
+except ImportError:
+    pywinstyles = None
+
+
 # Import Windows Runtime notification APIs
 import winrt.windows.ui.notifications as win_notify
 import winrt.windows.data.xml.dom as win_xml
@@ -108,7 +114,14 @@ class PiPWindow(ctk.CTkToplevel):
         self.attributes("-alpha", 0.85) # Transparent
         
         # Background color matching our dark aesthetic
-        self.configure(fg_color="#1F2937")
+        self.configure(fg_color="#1E293B")
+        
+        # Apply Apple-like Frosted Glass "Liquid Glass" theme to PiP window if pywinstyles is available
+        if pywinstyles:
+            try:
+                pywinstyles.apply_style(self, "acrylic")
+            except Exception:
+                pass
         
         # Position in bottom-right corner of screen
         screen_width = self.winfo_screenwidth()
@@ -728,9 +741,18 @@ class TimerApp:
         
         self.root = ctk.CTk()
         self.root.title(self.loc[self.current_lang]["title"])
-        self.root.geometry("520x600")
+        self.root.geometry("880x600")
         self.root.resizable(True, True)
-        self.root.minsize(520, 600)
+        self.root.minsize(820, 550)
+        
+        # Apply Apple-like Frosted Glass "Liquid Glass" theme using pywinstyles (with flat fallback)
+        if pywinstyles:
+            try:
+                pywinstyles.apply_style(self.root, "acrylic")
+                pywinstyles.change_header_color(self.root, "#111827")
+                pywinstyles.change_title_color(self.root, "#60A5FA")
+            except Exception as e:
+                print(f"[TimerApp] Custom titlebar styling note: {e}")
         
         try:
             self.root.iconbitmap(self.ico_path)
@@ -741,44 +763,109 @@ class TimerApp:
         label_font = ctk.CTkFont(family="Segoe UI", size=13, weight="bold")
         info_font = ctk.CTkFont(family="Segoe UI", size=12)
         
-        # Global Scroll Container
-        self.main_scroll_container = ctk.CTkScrollableFrame(
+        # Main flat deep slate container (translucent looking #111827)
+        self.main_container = ctk.CTkFrame(
             self.root,
             fg_color="#111827",
             corner_radius=0
         )
-        self.main_scroll_container.pack(fill="both", expand=True, padx=0, pady=0)
+        self.main_container.pack(fill="both", expand=True, padx=0, pady=0)
         
-        # Bind canvas configuration to auto-adjust scrollbar visibility
-        self.main_scroll_container._parent_canvas.bind(
+        # 1. Top Header Frame
+        header_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        header_frame.pack(fill="x", padx=30, pady=(20, 10))
+        
+        self.title_label = ctk.CTkLabel(
+            header_frame, 
+            text=self.loc[self.current_lang]["title"], 
+            font=title_font,
+            text_color="#60A5FA"
+        )
+        self.title_label.pack(anchor="w", pady=(0, 2))
+        
+        self.subtitle_label = ctk.CTkLabel(
+            header_frame,
+            text=self.loc[self.current_lang]["subtitle"],
+            font=info_font,
+            text_color="#9CA3AF"
+        )
+        self.subtitle_label.pack(anchor="w")
+        
+        # 2. Split Workspace Layout Frame (Dual-Column)
+        self.split_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self.split_frame.pack(fill="both", expand=True, padx=30, pady=(0, 20))
+        
+        # Left Panel: Active Ticking Task List Dashboard (60% width)
+        self.left_panel = ctk.CTkFrame(self.split_frame, fg_color="transparent")
+        self.left_panel.pack(side="left", fill="both", expand=True, padx=(0, 15))
+        
+        # Controls Frame (Title + Pause/Resume buttons horizontal layout)
+        controls_frame = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        controls_frame.pack(fill="x", pady=(0, 10))
+        
+        lang = self.current_lang
+        self.list_title_label = ctk.CTkLabel(
+            controls_frame,
+            text=self.loc[lang]["list_title"],
+            font=label_font,
+            text_color="#E5E7EB"
+        )
+        self.list_title_label.pack(side="left", anchor="w")
+        
+        # Pause All and Resume All buttons on the right side of the list title
+        self.global_resume_btn = ctk.CTkButton(
+            controls_frame,
+            text=self.loc[lang]["resume_all"],
+            font=info_font,
+            height=26,
+            width=80,
+            fg_color="#10B981",
+            hover_color="#059669",
+            command=self.global_resume
+        )
+        self.global_resume_btn.pack(side="right", padx=(5, 0))
+        
+        self.global_pause_btn = ctk.CTkButton(
+            controls_frame,
+            text=self.loc[lang]["pause_all"],
+            font=info_font,
+            height=26,
+            width=80,
+            fg_color="#374151",
+            hover_color="#4B5563",
+            command=self.global_pause
+        )
+        self.global_pause_btn.pack(side="right", padx=5)
+        
+        # Scrollable Task list frame (ticking cards directly inside here)
+        self.task_list_frame = ctk.CTkScrollableFrame(
+            self.left_panel,
+            fg_color="transparent"
+        )
+        self.task_list_frame.pack(fill="both", expand=True, pady=0)
+        
+        # Bind canvas configuration to auto-adjust scrollbar visibility dynamically
+        self.task_list_frame._parent_canvas.bind(
             "<Configure>", 
             lambda e: self.root.after(10, self.adjust_scrollbar_visibility), 
             add="+"
         )
         
-        # Header Box
-        self.title_label = ctk.CTkLabel(
-            self.main_scroll_container, 
-            text=self.loc[self.current_lang]["title"], 
-            font=title_font,
-            text_color="#60A5FA"
-        )
-        self.title_label.pack(pady=(20, 3))
+        # Right Panel: Task Creation Control Center (40% width)
+        self.right_panel = ctk.CTkFrame(self.split_frame, width=340, fg_color="transparent")
+        self.right_panel.pack(side="right", fill="both", padx=(15, 0))
+        self.right_panel.pack_propagate(False) # Keep width constant
         
-        self.subtitle_label = ctk.CTkLabel(
-            self.main_scroll_container,
-            text=self.loc[self.current_lang]["subtitle"],
-            font=info_font,
-            text_color="#9CA3AF"
+        form_frame = ctk.CTkFrame(
+            self.right_panel, 
+            corner_radius=12, 
+            fg_color="#1E293B", 
+            border_width=1, 
+            border_color="#334155"
         )
-        self.subtitle_label.pack(pady=(0, 15))
-        
-        # Main Creation Form Card
-        form_frame = ctk.CTkFrame(self.main_scroll_container, corner_radius=10, fg_color="#1F2937")
-        form_frame.pack(padx=30, fill="x", pady=(0, 15))
+        form_frame.pack(fill="both", expand=True)
         
         # Tab selection: Segmented Button
-        lang = self.current_lang
         self.segmented_button = ctk.CTkSegmentedButton(
             form_frame,
             values=[self.loc[lang]["tab_timer"], self.loc[lang]["tab_alarm"]],
@@ -859,7 +946,7 @@ class TimerApp:
         # Key bindings for auto-tabbing and keyboard focus management
         self.alarm_hour_entry.bind("<KeyRelease>", self.on_hour_keyrelease)
         self.alarm_hour_entry.bind("<KeyPress>", self.on_hour_keypress)
-        self.alarm_minute_entry.bind("<KeyPress>", self.on_minute_keypress)
+        self.alarm_hour_entry.bind("<KeyPress>", self.on_minute_keypress)
         self.alarm_hour_entry.bind("<Return>", lambda e: self.on_start_clicked())
         self.alarm_minute_entry.bind("<Return>", lambda e: self.on_start_clicked())
         
@@ -915,7 +1002,7 @@ class TimerApp:
         )
         self.sound_combobox.pack(fill="x", padx=20, pady=(0, 10))
         self.sound_combobox.set("🔔 经典闹铃 (Classic Alarm)" if lang == "zh" else "🔔 Classic Alarm")
-
+ 
         # Common Input: Message Text
         self.msg_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["msg_label"], font=label_font, text_color="#E5E7EB")
         self.msg_label.pack(anchor="w", padx=20, pady=(5, 2))
@@ -941,54 +1028,13 @@ class TimerApp:
             fg_color="#2563EB",
             hover_color="#1D4ED8"
         )
-        self.start_btn.pack(padx=20, fill="x", pady=(5, 15))
+        self.start_btn.pack(padx=20, fill="x", pady=(5, 10))
         
         # Error / Validation Label
-        self.error_label = ctk.CTkLabel(self.main_scroll_container, text="", font=info_font, text_color="#EF4444")
-        self.error_label.pack(pady=(0, 5))
+        self.error_label = ctk.CTkLabel(form_frame, text="", font=info_font, text_color="#EF4444")
+        self.error_label.pack(pady=(0, 10))
         
-        # Middle List Section Label & Controls
-        controls_frame = ctk.CTkFrame(self.main_scroll_container, fg_color="transparent")
-        controls_frame.pack(padx=30, fill="x", pady=(0, 5))
-        
-        self.global_pause_btn = ctk.CTkButton(
-            controls_frame,
-            text=self.loc[lang]["pause_all"],
-            font=info_font,
-            height=26,
-            fg_color="#374151",
-            hover_color="#4B5563",
-            command=self.global_pause
-        )
-        self.global_pause_btn.pack(side="left", padx=(0, 5))
-        
-        self.global_resume_btn = ctk.CTkButton(
-            controls_frame,
-            text=self.loc[lang]["resume_all"],
-            font=info_font,
-            height=26,
-            fg_color="#10B981",
-            hover_color="#059669",
-            command=self.global_resume
-        )
-        self.global_resume_btn.pack(side="left", padx=5)
-        
-        # Standard active tasks container inside the global scroll frame (Option A)
-        self.list_title_label = ctk.CTkLabel(
-            self.main_scroll_container,
-            text=self.loc[lang]["list_title"],
-            font=label_font,
-            text_color="#E5E7EB"
-        )
-        self.list_title_label.pack(padx=30, anchor="w", pady=(10, 5))
-        
-        self.task_list_frame = ctk.CTkFrame(
-            self.main_scroll_container,
-            fg_color="transparent"
-        )
-        self.task_list_frame.pack(padx=30, fill="x", expand=True, pady=(0, 20))
-        
-        # Floating Language Switch Button in the top-right corner of root, floating above scrollbar
+        # Floating Language Switch Button in the top-right corner of root
         self.lang_btn = ctk.CTkButton(
             self.root,
             text="EN" if lang == "zh" else "中",
@@ -1023,7 +1069,6 @@ class TimerApp:
         )
         self.pip_btn.place(relx=1.0, rely=0.0, anchor="ne", x=-80, y=20)
         self.pip_btn.lift()
-        
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
         
         # Initial Render & Loop Waking
@@ -1250,8 +1295,8 @@ class TimerApp:
 
     def adjust_scrollbar_visibility(self):
         try:
-            canvas = self.main_scroll_container._parent_canvas
-            scrollbar = self.main_scroll_container._scrollbar
+            canvas = self.task_list_frame._parent_canvas
+            scrollbar = self.task_list_frame._scrollbar
             canvas.update_idletasks()
             bbox = canvas.bbox("all")
             if bbox:
@@ -1260,7 +1305,7 @@ class TimerApp:
                 if content_height <= canvas_height:
                     scrollbar.grid_forget()
                 else:
-                    scrollbar.grid(row=0, column=1, sticky="ns", padx=(self.main_scroll_container._scrollbar_padx, 0))
+                    scrollbar.grid(row=0, column=1, sticky="ns", padx=(self.task_list_frame._scrollbar_padx, 0))
         except Exception as e:
             print(f"[Scrollbar] Error adjusting scrollbar: {e}")
 
@@ -1382,7 +1427,13 @@ class TimerApp:
             task_id = task["id"]
             
             # Card frame container (height is dynamic to fit the grid items elegantly)
-            card = ctk.CTkFrame(self.task_list_frame, fg_color="#1F2937", corner_radius=8)
+            card = ctk.CTkFrame(
+                self.task_list_frame, 
+                fg_color="#1E293B", 
+                corner_radius=10, 
+                border_width=1, 
+                border_color="#334155"
+            )
             card.pack(fill="x", padx=5, pady=4)
             
             card.grid_columnconfigure(0, weight=0) # Badge
