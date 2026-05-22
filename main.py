@@ -382,7 +382,8 @@ class TimerApp:
         self.root = ctk.CTk()
         self.root.title("多任务原生定时中心")
         self.root.geometry("520x600")
-        self.root.resizable(False, False)
+        self.root.resizable(True, True)
+        self.root.minsize(520, 600)
         
         try:
             self.root.iconbitmap(self.ico_path)
@@ -471,6 +472,18 @@ class TimerApp:
         repeat_label = ctk.CTkLabel(self.alarm_fields_frame, text="重复周期 (不勾选为单次):", font=label_font, text_color="#E5E7EB")
         repeat_label.pack(anchor="w", pady=(5, 2))
         
+        self.everyday_var = ctk.BooleanVar(value=False)
+        self.everyday_cb = ctk.CTkCheckBox(
+            self.alarm_fields_frame,
+            text="每天 (一至日)",
+            variable=self.everyday_var,
+            font=info_font,
+            checkbox_width=18,
+            checkbox_height=18,
+            command=self.on_everyday_changed
+        )
+        self.everyday_cb.pack(anchor="w", pady=(2, 5))
+        
         days_frame = ctk.CTkFrame(self.alarm_fields_frame, fg_color="transparent")
         days_frame.pack(fill="x", pady=(0, 5))
         
@@ -486,7 +499,8 @@ class TimerApp:
                 checkbox_width=16,
                 checkbox_height=16,
                 font=info_font,
-                border_width=2
+                border_width=2,
+                command=self.on_day_changed
             )
             cb.pack(side="left", padx=1)
             self.repeat_vars.append((i + 1, var))
@@ -584,30 +598,56 @@ class TimerApp:
         except ValueError:
             return None
 
+    def on_everyday_changed(self):
+        is_checked = self.everyday_var.get()
+        for _, var in self.repeat_vars:
+            var.set(is_checked)
+
+    def on_day_changed(self):
+        all_checked = all(var.get() for _, var in self.repeat_vars)
+        self.everyday_var.set(all_checked)
+
     def validate_alarm_time(self, time_str):
-        time_str = time_str.strip()
-        match = re.match(r"^([0-2]?[0-9]):([0-5][0-9])$", time_str)
-        if not match:
-            return None
-        h = int(match.group(1))
-        m = int(match.group(2))
-        if h < 0 or h > 23:
-            return None
-        return f"{h:02d}:{m:02d}"
+        time_str = time_str.strip().replace(":", " ")
+        time_str = re.sub(r"\s+", " ", time_str)
+        
+        if time_str.isdigit():
+            if len(time_str) in (1, 2):
+                h = int(time_str)
+                m = 0
+            elif len(time_str) == 3:
+                h = int(time_str[0])
+                m = int(time_str[1:])
+            elif len(time_str) == 4:
+                h = int(time_str[:2])
+                m = int(time_str[2:])
+            else:
+                return None
+        else:
+            parts = time_str.split(" ")
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                h = int(parts[0])
+                m = int(parts[1])
+            else:
+                return None
+                
+        if 0 <= h <= 23 and 0 <= m <= 59:
+            return f"{h:02d}:{m:02d}"
+        return None
 
     def on_start_clicked(self):
         """Validates inputs, appends a new task profile, and saves config."""
         current_tab = self.segmented_button.get()
         name_str = self.msg_entry.get().strip()
         if not name_str:
-            self.error_label.configure(text="❌ 请输入提醒内容！")
+            self.error_label.configure(text="❌ 请输入提醒内容！", text_color="#EF4444")
             return
             
         if current_tab == "⏳ 定时器":
             time_str = self.time_entry.get().strip()
             minutes = self.validate_timer_duration(time_str)
             if minutes is None:
-                self.error_label.configure(text="❌ 循环时间必须是大于 0 的数字！")
+                self.error_label.configure(text="❌ 循环时间必须是大于 0 的数字！", text_color="#EF4444")
                 return
                 
             is_loop = self.timer_loop_var.get()
@@ -626,7 +666,7 @@ class TimerApp:
             time_raw = self.alarm_time_entry.get().strip()
             alarm_time = self.validate_alarm_time(time_raw)
             if alarm_time is None:
-                self.error_label.configure(text="❌ 闹钟时间格式无效！请输入 HH:MM (如 08:30)！")
+                self.error_label.configure(text="❌ 闹钟时间格式无效！如输 830 或 1400 即可自动格式化！", text_color="#EF4444")
                 return
                 
             repeat_days = []
@@ -650,13 +690,25 @@ class TimerApp:
             self.tasks.append(new_task)
             
         self.save_config()
-        self.error_label.configure(text="")
+        
+        # Display green success text
+        self.error_label.configure(text="✓ 任务添加并启动成功！", text_color="#10B981")
+        # Automatically fade out success message after 3 seconds
+        self.root.after(3000, lambda: self.error_label.configure(text=""))
+        
+        # Reset form fields to default values
+        self.time_entry.delete(0, 'end')
+        self.time_entry.insert(0, "20.0")
+        self.alarm_time_entry.delete(0, 'end')
+        self.timer_loop_var.set(True)
+        self.everyday_var.set(False)
+        for _, var in self.repeat_vars:
+            var.set(False)
+        self.msg_entry.delete(0, 'end')
+        self.msg_entry.insert(0, "时间到了！请起来活动一下，喝杯水休息一会吧！")
         
         # Redraw GUI Cards
         self.render_task_list()
-        
-        # Hide Window on launch
-        self.hide_window()
 
     def render_task_list(self):
         """Redraws the scrollable frame with highly responsive rounded card sub-frames."""

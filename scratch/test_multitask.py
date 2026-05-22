@@ -149,7 +149,24 @@ def test_merged_sleep_compensation():
     app.exit_app()
     print("✅ Merged sleep compensation tests PASSED!")
 
+def test_intelligent_time_parsing():
+    print("\n=== Testing Intelligent Time Parsing ===")
+    app = TimerApp()
+    
+    assert app.validate_alarm_time("830") == "08:30", f"Expected 08:30, got {app.validate_alarm_time('830')}"
+    assert app.validate_alarm_time("8 30") == "08:30"
+    assert app.validate_alarm_time("0830") == "08:30"
+    assert app.validate_alarm_time("8") == "08:00"
+    assert app.validate_alarm_time("14:30") == "14:30"
+    assert app.validate_alarm_time("1430") == "14:30"
+    assert app.validate_alarm_time("abc") is None
+    assert app.validate_alarm_time("2560") is None
+    
+    app.exit_app()
+    print("✅ Intelligent time parsing unit tests PASSED!")
+
 if __name__ == "__main__":
+    test_intelligent_time_parsing()
     test_alarm_scheduler()
     test_concurrency_and_persistence()
     test_merged_sleep_compensation()
