@@ -1608,8 +1608,13 @@ class TimerApp:
 
     def update_gui_status(self):
         """Thread-safe UI polling loop (ticks once per second if window is viewable)."""
-        if not self.root or not self.root.winfo_exists() or not self.root.winfo_viewable():
+        if not self.root or not self.root.winfo_exists():
             self.status_loop_active = False
+            return
+            
+        if not self.root.winfo_viewable():
+            self.status_loop_active = True
+            self.root.after(1000, self.update_gui_status)
             return
             
         self.status_loop_active = True
