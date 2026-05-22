@@ -439,6 +439,21 @@ class TimerApp:
         self.save_config()
         self.render_task_list()
 
+    def reset_task(self, task_id):
+        """Resets an individual task card back to its starting state."""
+        with self.lock:
+            for task in self.tasks:
+                if task["id"] == task_id:
+                    if task["type"] == "timer":
+                        task["remaining_seconds"] = task["duration_minutes"] * 60.0
+                        if not task["is_paused"]:
+                            task["target_time"] = time.time() + task["remaining_seconds"]
+                    elif task["type"] == "alarm":
+                        task["target_time"] = calculate_next_alarm(task["alarm_time"], task["repeat_days"])
+                    break
+        self.save_config()
+        self.render_task_list()
+
     def global_pause(self):
         """Pauses all currently running tasks."""
         with self.lock:
@@ -1067,7 +1082,8 @@ class TimerApp:
             card.grid_columnconfigure(1, weight=1) # Icon + Name
             card.grid_columnconfigure(2, weight=1) # Dynamic Timer Display
             card.grid_columnconfigure(3, weight=0) # Controls: Pause
-            card.grid_columnconfigure(4, weight=0) # Controls: Trash
+            card.grid_columnconfigure(4, weight=0) # Controls: Reset
+            card.grid_columnconfigure(5, weight=0) # Controls: Trash
             
             # Status Indicator LED
             status_color = "#10B981" if not task["is_paused"] else "#F59E0B"
@@ -1115,6 +1131,19 @@ class TimerApp:
             )
             pause_btn.grid(row=0, column=3, padx=4, pady=8)
             
+            # Reset Icon trigger
+            reset_btn = ctk.CTkButton(
+                card,
+                text="🔄",
+                width=28,
+                height=28,
+                fg_color="#374151",
+                hover_color="#4B5563",
+                corner_radius=6,
+                command=lambda tid=task_id: self.reset_task(tid)
+            )
+            reset_btn.grid(row=0, column=4, padx=4, pady=8)
+            
             # Trash Icon trigger
             delete_btn = ctk.CTkButton(
                 card,
@@ -1126,7 +1155,7 @@ class TimerApp:
                 corner_radius=6,
                 command=lambda tid=task_id: self.delete_task(tid)
             )
-            delete_btn.grid(row=0, column=4, padx=(4, 12), pady=8)
+            delete_btn.grid(row=0, column=5, padx=(4, 12), pady=8)
             
         # Request immediate visual redraw of ticking components
         self.tick_gui_status()

@@ -166,9 +166,84 @@ def test_intelligent_time_parsing():
     app.exit_app()
     print("✅ Intelligent time parsing unit tests PASSED!")
 
+def test_manual_reset():
+    print("\n=== Testing Manual Reset ===")
+    app = TimerApp()
+    
+    # 1. Timer Reset while active (not paused)
+    task1 = {
+        "id": "test-timer-reset",
+        "type": "timer",
+        "name": "Reset Test Timer",
+        "duration_minutes": 10.0,
+        "is_auto_loop": False,
+        "is_paused": False,
+        "created_at": time.time(),
+        "target_time": time.time() + 300.0, # 5 mins left
+        "remaining_seconds": 300.0
+    }
+    
+    # 2. Timer Reset while paused
+    task2 = {
+        "id": "test-timer-reset-paused",
+        "type": "timer",
+        "name": "Reset Test Timer Paused",
+        "duration_minutes": 15.0,
+        "is_auto_loop": False,
+        "is_paused": True,
+        "created_at": time.time(),
+        "target_time": time.time() + 100.0,
+        "remaining_seconds": 200.0 # 200s left
+    }
+    
+    # 3. Alarm Reset
+    task3 = {
+        "id": "test-alarm-reset",
+        "type": "alarm",
+        "name": "Reset Test Alarm",
+        "alarm_time": "08:30",
+        "repeat_days": [],
+        "is_paused": False,
+        "target_time": time.time() - 3600.0 # expired 1 hr ago
+    }
+    
+    with app.lock:
+        app.tasks = [task1, task2, task3]
+        
+    # Reset active timer
+    app.reset_task("test-timer-reset")
+    with app.lock:
+        t1 = app.tasks[0]
+        # Active timer remaining seconds should reset, and target time should advance to now + 600s
+        diff = t1["target_time"] - time.time()
+        print(f"Active Timer Reset: target in {diff:.1f}s (expected ~600s)")
+        assert 590 <= diff <= 610, "Should reset to 10 mins (600s)"
+        assert t1["is_paused"] == False
+
+    # Reset paused timer
+    app.reset_task("test-timer-reset-paused")
+    with app.lock:
+        t2 = app.tasks[1]
+        # Paused timer remaining seconds should reset to 15 * 60 = 900s, state remains paused
+        print(f"Paused Timer Reset: remaining seconds = {t2['remaining_seconds']}s (expected 900s)")
+        assert t2["remaining_seconds"] == 900.0
+        assert t2["is_paused"] == True
+        
+    # Reset expired alarm
+    app.reset_task("test-alarm-reset")
+    with app.lock:
+        t3 = app.tasks[2]
+        # Recalculated target time should be in the future (greater than current time)
+        print(f"Alarm Reset: target time recalculation -> future: {t3['target_time'] > time.time()}")
+        assert t3["target_time"] > time.time()
+
+    app.exit_app()
+    print("✅ Manual Reset unit tests PASSED!")
+
 if __name__ == "__main__":
     test_intelligent_time_parsing()
     test_alarm_scheduler()
     test_concurrency_and_persistence()
     test_merged_sleep_compensation()
+    test_manual_reset()
     print("\n🏆 All tests passed successfully!")
