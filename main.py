@@ -403,7 +403,7 @@ class TimerApp:
         self.main_scroll_container.pack(fill="both", expand=True, padx=0, pady=0)
         
         # Bind canvas configuration to auto-adjust scrollbar visibility
-        self.main_scroll_container._canvas.bind(
+        self.main_scroll_container._parent_canvas.bind(
             "<Configure>", 
             lambda e: self.root.after(10, self.adjust_scrollbar_visibility), 
             add="+"
@@ -732,7 +732,7 @@ class TimerApp:
 
     def adjust_scrollbar_visibility(self):
         try:
-            canvas = self.main_scroll_container._canvas
+            canvas = self.main_scroll_container._parent_canvas
             scrollbar = self.main_scroll_container._scrollbar
             canvas.update_idletasks()
             bbox = canvas.bbox("all")
