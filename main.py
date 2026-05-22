@@ -450,6 +450,7 @@ class TimerApp:
                 "msg_placeholder": "输入 Toast 通知要显示的文本内容",
                 "msg_default": "时间到了！请起来活动一下，喝杯水休息一会吧！",
                 "add_task": "➕ 添加并启动新任务",
+                "add_task_short": "➕ 启动",
                 "pause_all": "⏸ 暂停全部",
                 "resume_all": "▶ 恢复全部",
                 "list_title": "⏳ 当前活动任务与闹钟列表",
@@ -495,6 +496,7 @@ class TimerApp:
                 "msg_placeholder": "Enter text to display in Toast notification",
                 "msg_default": "Time's up! Please get up, stretch, drink some water and take a break!",
                 "add_task": "➕ Add and Start New Task",
+                "add_task_short": "➕ Start",
                 "pause_all": "⏸ Pause All",
                 "resume_all": "▶ Resume All",
                 "list_title": "⏳ Active Tasks & Alarms List",
@@ -992,15 +994,32 @@ class TimerApp:
         self.timer_duration_label = ctk.CTkLabel(self.timer_fields_frame, text=self.loc[lang]["timer_duration"], font=label_font, text_color="#E5E7EB")
         self.timer_duration_label.pack(anchor="w", pady=(5, 2))
         
+        timer_input_row = ctk.CTkFrame(self.timer_fields_frame, fg_color="transparent")
+        timer_input_row.pack(fill="x", pady=(0, 5))
+        
         self.time_entry = ctk.CTkEntry(
-            self.timer_fields_frame, 
+            timer_input_row, 
             placeholder_text=self.loc[lang]["timer_placeholder"], 
             font=info_font,
             height=32,
             border_color="#4B5563"
         )
-        self.time_entry.pack(fill="x", pady=(0, 5))
+        self.time_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.time_entry.insert(0, "20.0")
+        self.time_entry.bind("<Return>", lambda e: self.on_start_clicked())
+        
+        self.timer_start_btn = ctk.CTkButton(
+            timer_input_row,
+            text=self.loc[lang]["add_task_short"],
+            command=self.on_start_clicked,
+            font=label_font,
+            height=32,
+            width=80,
+            corner_radius=8,
+            fg_color="#2563EB",
+            hover_color="#1D4ED8"
+        )
+        self.timer_start_btn.pack(side="right")
         
         self.timer_loop_var = ctk.BooleanVar(value=True)
         self.timer_loop_cb = ctk.CTkCheckBox(
@@ -1051,6 +1070,19 @@ class TimerApp:
             justify="center"
         )
         self.alarm_minute_entry.pack(side="left")
+        
+        self.alarm_start_btn = ctk.CTkButton(
+            entry_row,
+            text=self.loc[lang]["add_task_short"],
+            command=self.on_start_clicked,
+            font=label_font,
+            height=32,
+            width=80,
+            corner_radius=8,
+            fg_color="#2563EB",
+            hover_color="#1D4ED8"
+        )
+        self.alarm_start_btn.pack(side="right", padx=(8, 0), fill="x", expand=True)
         
         # Key bindings for auto-tabbing and keyboard focus management
         self.alarm_hour_entry.bind("<KeyRelease>", self.on_hour_keyrelease)
@@ -1126,18 +1158,7 @@ class TimerApp:
         self.msg_entry.pack(fill="x", padx=20, pady=(0, 10))
         self.msg_entry.insert(0, self.loc[lang]["msg_default"])
         
-        # Submit Button
-        self.start_btn = ctk.CTkButton(
-            form_frame,
-            text=self.loc[lang]["add_task"],
-            command=self.on_start_clicked,
-            font=label_font,
-            height=36,
-            corner_radius=8,
-            fg_color="#2563EB",
-            hover_color="#1D4ED8"
-        )
-        self.start_btn.pack(padx=20, fill="x", pady=(5, 10))
+
         
         # Error / Validation Label
         self.error_label = ctk.CTkLabel(form_frame, text="", font=info_font, text_color="#EF4444")
@@ -1279,8 +1300,9 @@ class TimerApp:
             
         self.msg_entry.configure(placeholder_text=self.loc[lang]["msg_placeholder"])
         
-        # 7. Add Button
-        self.start_btn.configure(text=self.loc[lang]["add_task"])
+        # 7. Add Buttons
+        self.timer_start_btn.configure(text=self.loc[lang]["add_task_short"])
+        self.alarm_start_btn.configure(text=self.loc[lang]["add_task_short"])
         
         # 8. Global Controls & Titles
         self.global_pause_btn.configure(text=self.loc[lang]["pause_all"])
@@ -1565,11 +1587,11 @@ class TimerApp:
             name_frame.grid(row=0, column=1, padx=5, pady=8, sticky="w")
             
             if task["type"] == "timer":
-                hglass = CTkHourglass(name_frame, size=28, bg_color="#1E293B")
+                hglass = CTkHourglass(name_frame, size=38, bg_color="#1E293B")
                 hglass.pack(side="left", padx=(0, 6))
                 self.task_hourglasses[task_id] = hglass
             else:
-                clock = CTkAlarmClock(name_frame, size=28, bg_color="#1E293B")
+                clock = CTkAlarmClock(name_frame, size=38, bg_color="#1E293B")
                 clock.pack(side="left", padx=(0, 6))
                 self.task_hourglasses[task_id] = clock
                 
