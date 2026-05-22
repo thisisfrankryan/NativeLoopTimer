@@ -136,3 +136,75 @@
   3. 运行 `git add .` —— **将当前路径下的所有文件重新索引**。
   4. 提交更改：`git commit -m "..."`。
   Git 内部算法会自动以 **100% 相似度** 判定该操作为“文件重命名/物理平移”，从而**完美无损地保留了此前所有的 commit 开发备份历史！**
+
+---
+
+### 8. Winsound 播放中断与单通道占线冲突
+
+* **🚨 错误现象 (Symptom)**：
+  在下拉框中高频切换不同预设音效以进行即时试听时，播放会出现破音、无声或短暂的卡死，且如果试听音乐未播放完就触发了系统 Toast，会发生铃声被硬生生切断的情况。
+* **🔍 根本原因 (Root Cause)**：
+  Windows 的原生 `winsound` 库采用单通道播放设计。在使用 `winsound.PlaySound(..., winsound.SND_ASYNC)` 进行异步音频播放时，只要再次发起播放请求，就会瞬间强制杀死（purge）上一个正在播放的通道音频。
+* **🛠️ 解决方案 (Solution)**：
+  在每次播放新音效前，显式地向 winsound 发送清空指令，以释放底层音频占线锁，同时保证捕获一切底层 IO 异常：
+  ```python
+  try:
+      # 显式清除前一次正在播放的音频
+      winsound.PlaySound(None, winsound.SND_PURGE)
+      if os.path.exists(sound_filepath):
+          winsound.PlaySound(sound_filepath, winsound.SND_FILENAME | winsound.SND_ASYNC)
+  except Exception as e:
+      print(f"Sound playback error: {e}")
+  ```
+
+---
+
+### 9. Windows Toast 通知默认提示音重叠与 XML 静音机制
+
+* **🚨 错误现象 (Symptom)**：
+  自定义铃声生效并触发通知时，音箱里同时传出 Windows 系统默认的“叮”提示音和用户自选的精美和弦铃声，两股声音重叠冲突，体验非常廉价。
+* **🔍 根本原因 (Root Cause)**：
+  Windows UI Notifications (WinRT) 的 Toast 通知模板在默认情况下会伴随系统级的声音通道。如果我们不明确禁用系统默认声音，且在 Python 层额外调用 `winsound` 播音，就会造成双重声音并发。
+* **🛠️ 解决方案 (Solution)**：
+  必须在向 WinRT 推送的 XML 模板树中，将 `<audio>` 元素的 `silent` 属性强行声明为 `"true"`：
+  ```xml
+  <toast>
+      <visual>...</visual>
+      <audio silent="true"/>
+  </toast>
+  ```
+  这样，Windows 将在滑出通知时保持绝对静默，将播音主权 100% 移交给我们的 Python `winsound` 模块，完美输出高保真铃声。
+
+---
+
+### 10. Tkinter 无边框窗口 (`overrideredirect`) 的焦点与拖拽交互问题
+
+* **🚨 错误现象 (Symptom)**：
+  点击画中画 (PiP) 模式后，弹出的无边框悬浮小窗完全无法用鼠标拖动，并且一旦点击其他软件，悬浮窗就会被压到游戏或 IDE 背后，失去了“画中画常驻”的意义。
+* **🔍 根本原因 (Root Cause)**：
+  1. 在 Tkinter 中使用 `self.overrideredirect(True)` 剥离了系统的窗口标题栏与边框，也一并剥离了系统默认的窗口拖拽行为，必须手动绑定鼠标事件进行坐标变换。
+  2. 剥离边框后，窗口默认不会成为 Topmost（置顶），一旦失去焦点就会沉降在其他应用下方。
+* **🛠️ 解决方案 (Solution)**：
+  1. **手动拖拽坐标映射**：在 `__init__` 中为窗口画布绑定 `<Button-1>` 与 `<B1-Motion>` 鼠标拖拽事件，实时计算并偏移位置。
+  2. **强行置顶与半透明**：声明 `-topmost` 属性为 `True`，并设置 `-alpha` 为 `0.85`，让小浮窗既能常驻置顶，又不遮挡下方打码或打游戏。
+  ```python
+  self.overrideredirect(True)
+  self.attributes("-topmost", True)
+  self.attributes("-alpha", 0.85)
+
+  # 拖拽绑定
+  self.bind("<Button-1>", self.start_drag)
+  self.bind("<B1-Motion>", self.on_drag)
+  ```
+
+---
+
+### 11. 卡片固定高度引起的布局截断崩溃
+
+* **🚨 错误现象 (Symptom)**：
+  在卡片列表中添加了动态进度条组件后，下方的按钮和文本出现严重挤压、错位、甚至部分被截断隐藏，导致界面十分不协调。
+* **🔍 根本原因 (Root Cause)**：
+  先前卡片容器 `CTkFrame` 被强行声明了硬编码的高度（如 `height=45`）。当在其内部的 grid 网格系统添加新行（如 `row=1` 的进度条）后，总高度超出限制，Tkinter 为了强行契合 `height=45` 只能截断子组件。
+* **🛠️ 解决方案 (Solution)**：
+  **彻底移除** `CTkFrame` 里的 `height` 限制，将卡片的高度交由内部的 grid 元素自适应撑开，并为进度条添加合理的 padding 间距，确保完美的视觉体验。
+
