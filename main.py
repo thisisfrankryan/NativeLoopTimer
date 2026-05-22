@@ -121,14 +121,14 @@ class CTkHourglass(tk.Canvas):
     def draw(self):
         self.delete("all")
         s = self.size
-        pad = 2
+        pad = s * 0.08
         cx = s / 2
         cy = s / 2
         
-        top_y = pad + 2
-        bot_y = s - pad - 2
+        top_y = pad + s * 0.05
+        bot_y = s - pad - s * 0.05
         neck_y = cy
-        neck_w = 3
+        neck_w = s * 0.1
         
         # Draw sand in the top bulb (shrinking as ratio goes from 1.0 down to 0.0)
         if self.ratio > 0.0:
@@ -147,17 +147,17 @@ class CTkHourglass(tk.Canvas):
             
         # Draw the falling sand stream if running and has sand left to fall
         if not self.is_paused and self.ratio > 0.0 and self.ratio < 1.0:
-            self.create_line(cx, cy, cx, bot_y - elapsed * (bot_y - cy), fill=self.sand_color, width=1.5)
+            self.create_line(cx, cy, cx, bot_y - elapsed * (bot_y - cy), fill=self.sand_color, width=max(1.5, s * 0.03))
             
         # Draw the physical wooden/metal plates
-        self.create_line(pad, top_y, s-pad, top_y, fill="#64748B", width=2, capstyle="round") # Top
-        self.create_line(pad, bot_y, s-pad, bot_y, fill="#64748B", width=2, capstyle="round") # Bottom
+        self.create_line(pad, top_y, s-pad, top_y, fill="#64748B", width=max(2.0, s * 0.05), capstyle="round") # Top
+        self.create_line(pad, bot_y, s-pad, bot_y, fill="#64748B", width=max(2.0, s * 0.05), capstyle="round") # Bottom
         
         # Draw the outer glass diagonals
-        self.create_line(pad, top_y, cx-neck_w/2, cy, fill="#475569", width=1)
-        self.create_line(s-pad, top_y, cx+neck_w/2, cy, fill="#475569", width=1)
-        self.create_line(cx-neck_w/2, cy, pad, bot_y, fill="#475569", width=1)
-        self.create_line(cx+neck_w/2, cy, s-pad, bot_y, fill="#475569", width=1)
+        self.create_line(pad, top_y, cx-neck_w/2, cy, fill="#475569", width=max(1.0, s * 0.02))
+        self.create_line(s-pad, top_y, cx+neck_w/2, cy, fill="#475569", width=max(1.0, s * 0.02))
+        self.create_line(cx-neck_w/2, cy, pad, bot_y, fill="#475569", width=max(1.0, s * 0.02))
+        self.create_line(cx+neck_w/2, cy, s-pad, bot_y, fill="#475569", width=max(1.0, s * 0.02))
 
 
 class CTkAlarmClock(tk.Canvas):
@@ -180,30 +180,32 @@ class CTkAlarmClock(tk.Canvas):
         s = self.size
         cx = s / 2
         cy = s / 2
-        r = (s / 2) - 4
+        r = (s / 2) - max(4.0, s * 0.1)
         
         # Alarm feet
-        self.create_line(cx - r + 2, cy + r - 1, cx - r - 1, cy + r + 2, fill="#64748B", width=2)
-        self.create_line(cx + r - 2, cy + r - 1, cx + r + 1, cy + r + 2, fill="#64748B", width=2)
+        self.create_line(cx - r + max(2.0, s * 0.06), cy + r - max(1.0, s * 0.03), cx - r - max(1.0, s * 0.03), cy + r + max(2.0, s * 0.06), fill="#64748B", width=max(2.0, s * 0.06))
+        self.create_line(cx + r - max(2.0, s * 0.06), cy + r - max(1.0, s * 0.03), cx + r + max(1.0, s * 0.03), cy + r + max(2.0, s * 0.06), fill="#64748B", width=max(2.0, s * 0.06))
         
         # Twin bells at top
-        self.create_oval(cx - r - 1, cy - r - 1, cx - r + 3, cy - r + 3, fill="#64748B", outline="")
-        self.create_oval(cx + r - 3, cy - r - 1, cx + r + 1, cy - r + 3, fill="#64748B", outline="")
+        bell_r = max(2.0, s * 0.1)
+        self.create_oval(cx - r - bell_r, cy - r - bell_r, cx - r + bell_r, cy - r + bell_r, fill="#64748B", outline="")
+        self.create_oval(cx + r - bell_r, cy - r - bell_r, cx + r + bell_r, cy - r + bell_r, fill="#64748B", outline="")
         
         # Outer clock face ring
-        self.create_oval(cx - r, cy - r, cx + r, cy + r, outline="#64748B", width=1.5)
+        self.create_oval(cx - r, cy - r, cx + r, cy + r, outline="#64748B", width=max(1.5, s * 0.05))
         
         # Clock hands at 10:10
         hx = cx + (r * 0.45) * math.cos(math.radians(-120))
         hy = cy + (r * 0.45) * math.sin(math.radians(-120))
-        self.create_line(cx, cy, hx, hy, fill=self.clock_color, width=1.5, capstyle="round")
+        self.create_line(cx, cy, hx, hy, fill=self.clock_color, width=max(1.5, s * 0.05), capstyle="round")
         
         mx = cx + (r * 0.65) * math.cos(math.radians(-30))
         my = cy + (r * 0.65) * math.sin(math.radians(-30))
-        self.create_line(cx, cy, mx, my, fill=self.clock_color, width=1.2, capstyle="round")
+        self.create_line(cx, cy, mx, my, fill=self.clock_color, width=max(1.2, s * 0.04), capstyle="round")
         
         # Center pin dot
-        self.create_oval(cx - 1, cy - 1, cx + 1, cy + 1, fill=self.clock_color, outline="")
+        pin_r = max(1.0, s * 0.04)
+        self.create_oval(cx - pin_r, cy - pin_r, cx + pin_r, cy + pin_r, fill=self.clock_color, outline="")
 
 
 class PiPWindow(ctk.CTkToplevel):
@@ -212,7 +214,7 @@ class PiPWindow(ctk.CTkToplevel):
         self.app = parent_app
         
         # Window setup
-        self.title("PiP Mode")
+        self.title(self.app.loc[self.app.current_lang].get("pip_title", "PiP Mode"))
         self.overrideredirect(True) # Borderless
         self.attributes("-topmost", True) # Always on top
         self.attributes("-alpha", 0.85) # Transparent
@@ -246,7 +248,7 @@ class PiPWindow(ctk.CTkToplevel):
         # Top half: Task name & Icon
         self.task_label = ctk.CTkLabel(
             self.content_frame, 
-            text="No active task", 
+            text=self.app.loc[self.app.current_lang].get("pip_no_task", "No active task"), 
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             text_color="#E5E7EB",
             anchor="w"
@@ -476,7 +478,9 @@ class TimerApp:
                 "tray_pause": "全局暂停所有 (Pause All)",
                 "tray_resume": "全局恢复所有 (Resume All)",
                 "tray_exit": "退出 (Exit)",
-                "tray_title": "多任务原生定时中心"
+                "tray_title": "多任务原生定时中心",
+                "pip_title": "画中画模式",
+                "pip_no_task": "暂无活动任务"
             },
             "en": {
                 "title": "⏰ Multi-Task Native Timer Center",
@@ -522,7 +526,9 @@ class TimerApp:
                 "tray_pause": "Pause All Tasks",
                 "tray_resume": "Resume All Tasks",
                 "tray_exit": "Exit",
-                "tray_title": "Multi-Task Native Timer Center"
+                "tray_title": "Multi-Task Native Timer Center",
+                "pip_title": "PiP Mode",
+                "pip_no_task": "No active task"
             }
         }
         self.current_lang = "zh"
@@ -1209,6 +1215,8 @@ class TimerApp:
         """Toggles active application language and updates all UI elements dynamically."""
         self.current_lang = "en" if self.current_lang == "zh" else "zh"
         self.save_config()
+        self.lang_btn.configure(text="EN" if self.current_lang == "zh" else "中")
+        self.retranslate_ui()
 
     def toggle_pip_mode(self):
         """Toggles picture-in-picture float mode."""
@@ -1231,12 +1239,6 @@ class TimerApp:
                 winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
         except Exception as e:
             print(f"[TimerApp] Sound preview warning: {e}")
-        
-        # Update float toggle button text
-        self.lang_btn.configure(text="EN" if self.current_lang == "zh" else "中")
-        
-        # Retranslate all GUI components
-        self.retranslate_ui()
 
     def retranslate_ui(self):
         """Updates all visible texts in the UI to match self.current_lang."""
@@ -1311,6 +1313,11 @@ class TimerApp:
         
         # 9. Active Tasks and System Tray Menu
         self.render_task_list()
+        
+        if self.pip_window and self.pip_window.winfo_exists():
+            self.pip_window.title(self.loc[lang].get("pip_title", "PiP Mode"))
+            # Trigger immediate UI refresh inside PiP window
+            self.pip_window.update_pip()
         
         if self.tray_icon:
             menu = pystray.Menu(
@@ -1582,31 +1589,32 @@ class TimerApp:
             status_dot.grid(row=0, column=0, padx=(12, 6), pady=8)
             self.task_status_badges[task_id] = status_dot
             
-            # Name and Type Badge (Flowing Hourglass or Analog Clock Face)
-            name_frame = ctk.CTkFrame(card, fg_color="transparent")
-            name_frame.grid(row=0, column=1, padx=5, pady=8, sticky="w")
-            
-            if task["type"] == "timer":
-                hglass = CTkHourglass(name_frame, size=38, bg_color="#1E293B")
-                hglass.pack(side="left", padx=(0, 6))
-                self.task_hourglasses[task_id] = hglass
-            else:
-                clock = CTkAlarmClock(name_frame, size=38, bg_color="#1E293B")
-                clock.pack(side="left", padx=(0, 6))
-                self.task_hourglasses[task_id] = clock
-                
+            # Name Label (directly in grid column 1)
             name_text = task["name"]
             if len(name_text) > 12:
                 name_text = name_text[:10] + "..."
                 
             name_label = ctk.CTkLabel(
-                name_frame,
+                card,
                 text=name_text,
                 font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
                 text_color="#E5E7EB",
                 anchor="w"
             )
-            name_label.pack(side="left")
+            name_label.grid(row=0, column=1, padx=5, pady=8, sticky="w")
+            
+            # Massive visual sand hourglass / alarm clock in its own row centered
+            canvas_frame = ctk.CTkFrame(card, fg_color="transparent")
+            canvas_frame.grid(row=1, column=0, columnspan=6, padx=12, pady=(5, 10))
+            
+            if task["type"] == "timer":
+                hglass = CTkHourglass(canvas_frame, size=280, bg_color="#1E293B")
+                hglass.pack()
+                self.task_hourglasses[task_id] = hglass
+            else:
+                clock = CTkAlarmClock(canvas_frame, size=280, bg_color="#1E293B")
+                clock.pack()
+                self.task_hourglasses[task_id] = clock
             
             # Clock Countdown Label
             time_label = ctk.CTkLabel(
@@ -1660,7 +1668,7 @@ class TimerApp:
             )
             delete_btn.grid(row=0, column=5, padx=(4, 12), pady=8)
             
-            # Dynamic Card Progress Bar spanning all 6 columns in row 1
+            # Dynamic Card Progress Bar spanning all 6 columns in row 2 (bottom)
             progress_bar = ctk.CTkProgressBar(
                 card,
                 height=3,
@@ -1668,7 +1676,7 @@ class TimerApp:
                 fg_color="#374151",
                 progress_color="#10B981"
             )
-            progress_bar.grid(row=1, column=0, columnspan=6, sticky="ew", padx=12, pady=(0, 6))
+            progress_bar.grid(row=2, column=0, columnspan=6, sticky="ew", padx=12, pady=(0, 10))
             progress_bar.set(1.0)
             self.task_progress_bars[task_id] = progress_bar
             
