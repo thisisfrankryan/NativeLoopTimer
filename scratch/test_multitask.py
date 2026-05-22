@@ -5,7 +5,7 @@ import json
 import uuid
 
 # Add workspace to system path
-sys.path.append(r'd:\antigravity')
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from main import TimerApp, calculate_next_alarm
 
 def test_alarm_scheduler():
@@ -44,7 +44,8 @@ def test_concurrency_and_persistence():
     print("\n=== Testing Concurrency & Persistence ===")
     
     # Clear config first to start fresh
-    config_path = os.path.join(r'd:\antigravity', "config.json")
+    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config_path = os.path.join(app_dir, "config.json")
     if os.path.exists(config_path):
         os.remove(config_path)
         

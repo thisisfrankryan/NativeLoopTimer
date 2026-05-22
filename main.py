@@ -116,12 +116,105 @@ class TimerApp:
         self.ico_path = os.path.join(self.app_dir, "app_icon.ico")
         self.png_path = os.path.join(self.app_dir, "app_icon.png")
         
+        # Localization data
+        self.loc = {
+            "zh": {
+                "title": "⏰ 多任务原生定时中心",
+                "subtitle": "独立多任务并发 · 暂停/恢复管理 · 系统级防丢自唤醒",
+                "tab_timer": "⏳ 定时器",
+                "tab_alarm": "⏰ 闹钟",
+                "timer_duration": "倒计时时间 (分钟):",
+                "timer_placeholder": "输入分钟数 (如 20 或 0.5)",
+                "timer_loop": "触发后自动循环计时",
+                "alarm_time": "闹钟时间:",
+                "alarm_hour_placeholder": "时",
+                "alarm_minute_placeholder": "分",
+                "repeat_cycle": "重复周期 (不勾选为单次):",
+                "everyday": "每天 (一至日)",
+                "weekdays": ["一", "二", "三", "四", "五", "六", "日"],
+                "msg_label": "提醒显示内容:",
+                "msg_placeholder": "输入 Toast 通知要显示的文本内容",
+                "msg_default": "时间到了！请起来活动一下，喝杯水休息一会吧！",
+                "add_task": "➕ 添加并启动新任务",
+                "pause_all": "⏸ 暂停全部",
+                "resume_all": "▶ 恢复全部",
+                "list_title": "⏳ 当前活动任务与闹钟列表",
+                "empty_list": "暂无运行中的定时任务，请在上方添加！",
+                "error_msg_empty": "❌ 请输入提醒内容！",
+                "error_timer_invalid": "❌ 循环时间必须是大于 0 的数字！",
+                "error_alarm_invalid": "❌ 闹钟时间格式无效！在小时 and 分钟框输入数字即可！",
+                "success_add": "✓ 任务添加并启动成功！",
+                "status_waiting": "等待中...",
+                "status_paused": "已暂停",
+                "status_paused_rem": "暂停 (余 {min}分{sec}秒)",
+                "status_rem": "剩余: {min}分{sec}秒",
+                "status_target": "目标: {time}{repeat}",
+                "repeat_everyday": " (每天)",
+                "repeat_weekdays": " (工作日)",
+                "repeat_weekends": " (周末)",
+                "repeat_days_fmt": " (周{days})",
+                "repeat_oneoff": " (单次)",
+                "toast_title_single": "定时中心提醒",
+                "toast_title_multi": "错过了 {count} 个提醒",
+                "tray_show": "显示设置 (Settings)",
+                "tray_pause": "全局暂停所有 (Pause All)",
+                "tray_resume": "全局恢复所有 (Resume All)",
+                "tray_exit": "退出 (Exit)",
+                "tray_title": "多任务原生定时中心"
+            },
+            "en": {
+                "title": "⏰ Multi-Task Native Timer Center",
+                "subtitle": "Independent Concurrency · Pause/Resume Management · Wake-up Protection",
+                "tab_timer": "⏳ Timer",
+                "tab_alarm": "⏰ Alarm",
+                "timer_duration": "Countdown Duration (Minutes):",
+                "timer_placeholder": "Enter minutes (e.g. 20 or 0.5)",
+                "timer_loop": "Auto-loop timing after trigger",
+                "alarm_time": "Alarm Time:",
+                "alarm_hour_placeholder": "Hr",
+                "alarm_minute_placeholder": "Min",
+                "repeat_cycle": "Repeat Cycle (One-off if unchecked):",
+                "everyday": "Everyday (Mon-Sun)",
+                "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                "msg_label": "Alert Message Content:",
+                "msg_placeholder": "Enter text to display in Toast notification",
+                "msg_default": "Time's up! Please get up, stretch, drink some water and take a break!",
+                "add_task": "➕ Add and Start New Task",
+                "pause_all": "⏸ Pause All",
+                "resume_all": "▶ Resume All",
+                "list_title": "⏳ Active Tasks & Alarms List",
+                "empty_list": "No active tasks. Add a new one above!",
+                "error_msg_empty": "❌ Please enter the alert message!",
+                "error_timer_invalid": "❌ Countdown duration must be a number greater than 0!",
+                "error_alarm_invalid": "❌ Invalid alarm time format! Just enter numbers in the hour and minute boxes!",
+                "success_add": "✓ Task added and started successfully!",
+                "status_waiting": "Waiting...",
+                "status_paused": "Paused",
+                "status_paused_rem": "Paused ({min}m {sec}s left)",
+                "status_rem": "Remaining: {min}m {sec}s",
+                "status_target": "Target: {time}{repeat}",
+                "repeat_everyday": " (Everyday)",
+                "repeat_weekdays": " (Weekdays)",
+                "repeat_weekends": " (Weekends)",
+                "repeat_days_fmt": " ({days})",
+                "repeat_oneoff": " (One-off)",
+                "toast_title_single": "Timer Center Reminder",
+                "toast_title_multi": "Missed {count} reminders",
+                "tray_show": "Show Settings",
+                "tray_pause": "Pause All Tasks",
+                "tray_resume": "Resume All Tasks",
+                "tray_exit": "Exit",
+                "tray_title": "Multi-Task Native Timer Center"
+            }
+        }
+        self.current_lang = "zh"
+        
         # Initialize
         self.app_id = "NativeLoopTimer"
         self.register_app_id()
         self.ensure_assets()
         
-        # Load tasks from config.json and compensate missed alarms
+        # Load tasks and language choice from config.json
         self.tasks = self.load_config()
         self.check_and_compensate_missed_tasks(time.time())
         
@@ -137,7 +230,7 @@ class TimerApp:
         path = rf"Software\Classes\AppUserModelId\{self.app_id}"
         try:
             key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, path)
-            winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, "多任务原生定时中心")
+            winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, "多任务原生定时中心 (NativeLoopTimer)")
             winreg.CloseKey(key)
             
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(self.app_id)
@@ -179,11 +272,15 @@ class TimerApp:
         """Loads and normalizes task profiles from config.json."""
         config_path = os.path.join(self.app_dir, "config.json")
         if not os.path.exists(config_path):
+            self.current_lang = "zh"
             return []
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 tasks = data.get("tasks", [])
+                self.current_lang = data.get("language", "zh")
+                if self.current_lang not in ("zh", "en"):
+                    self.current_lang = "zh"
                 
                 # Normalize types to prevent JSON schema compatibility issues
                 for task in tasks:
@@ -200,6 +297,7 @@ class TimerApp:
                 return tasks
         except Exception as e:
             print(f"[TimerApp] Error loading config: {e}")
+            self.current_lang = "zh"
             return []
 
     def save_config(self):
@@ -207,7 +305,7 @@ class TimerApp:
         config_path = os.path.join(self.app_dir, "config.json")
         try:
             with open(config_path, "w", encoding="utf-8") as f:
-                json.dump({"tasks": self.tasks}, f, ensure_ascii=False, indent=2)
+                json.dump({"tasks": self.tasks, "language": self.current_lang}, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"[TimerApp] Error saving config: {e}")
 
@@ -217,11 +315,12 @@ class TimerApp:
             return
             
         try:
+            lang = self.current_lang
             if len(missed_tasks) == 1:
-                title = "定时中心提醒"
+                title = self.loc[lang]["toast_title_single"]
                 message = missed_tasks[0]["name"]
             else:
-                title = f"错过了 {len(missed_tasks)} 个提醒"
+                title = self.loc[lang]["toast_title_multi"].format(count=len(missed_tasks))
                 message = "\n".join([f"• {t['name']}" for t in missed_tasks])
                 
             xml_str = f"""
@@ -380,7 +479,7 @@ class TimerApp:
         ctk.set_default_color_theme("blue")
         
         self.root = ctk.CTk()
-        self.root.title("多任务原生定时中心")
+        self.root.title(self.loc[self.current_lang]["title"])
         self.root.geometry("520x600")
         self.root.resizable(True, True)
         self.root.minsize(520, 600)
@@ -410,47 +509,48 @@ class TimerApp:
         )
         
         # Header Box
-        title_label = ctk.CTkLabel(
+        self.title_label = ctk.CTkLabel(
             self.main_scroll_container, 
-            text="⏰ 多任务原生定时中心", 
+            text=self.loc[self.current_lang]["title"], 
             font=title_font,
             text_color="#60A5FA"
         )
-        title_label.pack(pady=(20, 3))
+        self.title_label.pack(pady=(20, 3))
         
-        subtitle_label = ctk.CTkLabel(
+        self.subtitle_label = ctk.CTkLabel(
             self.main_scroll_container,
-            text="独立多任务并发 · 暂停/恢复管理 · 系统级防丢自唤醒",
+            text=self.loc[self.current_lang]["subtitle"],
             font=info_font,
             text_color="#9CA3AF"
         )
-        subtitle_label.pack(pady=(0, 15))
+        self.subtitle_label.pack(pady=(0, 15))
         
         # Main Creation Form Card
         form_frame = ctk.CTkFrame(self.main_scroll_container, corner_radius=10, fg_color="#1F2937")
         form_frame.pack(padx=30, fill="x", pady=(0, 15))
         
         # Tab selection: Segmented Button
+        lang = self.current_lang
         self.segmented_button = ctk.CTkSegmentedButton(
             form_frame,
-            values=["⏳ 定时器", "⏰ 闹钟"],
+            values=[self.loc[lang]["tab_timer"], self.loc[lang]["tab_alarm"]],
             command=self.on_segmented_btn_changed,
             font=label_font,
             height=32
         )
         self.segmented_button.pack(padx=20, pady=(15, 5), fill="x")
-        self.segmented_button.set("⏳ 定时器")
+        self.segmented_button.set(self.loc[lang]["tab_timer"])
         
         # Sub-form 1: Timer Fields
         self.timer_fields_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
         self.timer_fields_frame.pack(fill="x", padx=20, pady=5)
         
-        time_label = ctk.CTkLabel(self.timer_fields_frame, text="倒计时时间 (分钟):", font=label_font, text_color="#E5E7EB")
-        time_label.pack(anchor="w", pady=(5, 2))
+        self.timer_duration_label = ctk.CTkLabel(self.timer_fields_frame, text=self.loc[lang]["timer_duration"], font=label_font, text_color="#E5E7EB")
+        self.timer_duration_label.pack(anchor="w", pady=(5, 2))
         
         self.time_entry = ctk.CTkEntry(
             self.timer_fields_frame, 
-            placeholder_text="输入分钟数 (如 20 或 0.5)", 
+            placeholder_text=self.loc[lang]["timer_placeholder"], 
             font=info_font,
             height=32,
             border_color="#4B5563"
@@ -461,7 +561,7 @@ class TimerApp:
         self.timer_loop_var = ctk.BooleanVar(value=True)
         self.timer_loop_cb = ctk.CTkCheckBox(
             self.timer_fields_frame,
-            text="触发后自动循环计时",
+            text=self.loc[lang]["timer_loop"],
             variable=self.timer_loop_var,
             font=info_font,
             checkbox_width=18,
@@ -472,8 +572,8 @@ class TimerApp:
         # Sub-form 2: Alarm Fields (hidden initially)
         self.alarm_fields_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
         
-        alarm_label = ctk.CTkLabel(self.alarm_fields_frame, text="闹钟时间:", font=label_font, text_color="#E5E7EB")
-        alarm_label.pack(anchor="w", pady=(5, 2))
+        self.alarm_time_label = ctk.CTkLabel(self.alarm_fields_frame, text=self.loc[lang]["alarm_time"], font=label_font, text_color="#E5E7EB")
+        self.alarm_time_label.pack(anchor="w", pady=(5, 2))
         
         entry_row = ctk.CTkFrame(self.alarm_fields_frame, fg_color="transparent")
         entry_row.pack(fill="x", pady=(0, 5))
@@ -481,7 +581,7 @@ class TimerApp:
         self.alarm_hour_entry = ctk.CTkEntry(
             entry_row,
             width=60,
-            placeholder_text="时",
+            placeholder_text=self.loc[lang]["alarm_hour_placeholder"],
             font=info_font,
             height=32,
             border_color="#4B5563",
@@ -489,18 +589,18 @@ class TimerApp:
         )
         self.alarm_hour_entry.pack(side="left")
         
-        colon_label = ctk.CTkLabel(
+        self.colon_label = ctk.CTkLabel(
             entry_row, 
             text=":", 
             font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"), 
             text_color="#9CA3AF"
         )
-        colon_label.pack(side="left", padx=8)
+        self.colon_label.pack(side="left", padx=8)
         
         self.alarm_minute_entry = ctk.CTkEntry(
             entry_row,
             width=60,
-            placeholder_text="分",
+            placeholder_text=self.loc[lang]["alarm_minute_placeholder"],
             font=info_font,
             height=32,
             border_color="#4B5563",
@@ -515,13 +615,13 @@ class TimerApp:
         self.alarm_hour_entry.bind("<Return>", lambda e: self.on_start_clicked())
         self.alarm_minute_entry.bind("<Return>", lambda e: self.on_start_clicked())
         
-        repeat_label = ctk.CTkLabel(self.alarm_fields_frame, text="重复周期 (不勾选为单次):", font=label_font, text_color="#E5E7EB")
-        repeat_label.pack(anchor="w", pady=(5, 2))
+        self.repeat_label = ctk.CTkLabel(self.alarm_fields_frame, text=self.loc[lang]["repeat_cycle"], font=label_font, text_color="#E5E7EB")
+        self.repeat_label.pack(anchor="w", pady=(5, 2))
         
         self.everyday_var = ctk.BooleanVar(value=False)
         self.everyday_cb = ctk.CTkCheckBox(
             self.alarm_fields_frame,
-            text="每天 (一至日)",
+            text=self.loc[lang]["everyday"],
             variable=self.everyday_var,
             font=info_font,
             checkbox_width=18,
@@ -534,14 +634,15 @@ class TimerApp:
         days_frame.pack(fill="x", pady=(0, 5))
         
         self.repeat_vars = []
-        weekdays_label = ["一", "二", "三", "四", "五", "六", "日"]
+        self.repeat_checkboxes = []
+        weekdays_label = self.loc[lang]["weekdays"]
         for i, day in enumerate(weekdays_label):
             var = ctk.BooleanVar(value=False)
             cb = ctk.CTkCheckBox(
                 days_frame,
                 text=day,
                 variable=var,
-                width=40,
+                width=42 if lang == "en" else 40,
                 checkbox_width=16,
                 checkbox_height=16,
                 font=info_font,
@@ -550,25 +651,26 @@ class TimerApp:
             )
             cb.pack(side="left", padx=1)
             self.repeat_vars.append((i + 1, var))
+            self.repeat_checkboxes.append(cb)
             
         # Common Input: Message Text
-        msg_label = ctk.CTkLabel(form_frame, text="提醒显示内容:", font=label_font, text_color="#E5E7EB")
-        msg_label.pack(anchor="w", padx=20, pady=(5, 2))
+        self.msg_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["msg_label"], font=label_font, text_color="#E5E7EB")
+        self.msg_label.pack(anchor="w", padx=20, pady=(5, 2))
         
         self.msg_entry = ctk.CTkEntry(
             form_frame, 
-            placeholder_text="输入 Toast 通知要显示的文本内容", 
+            placeholder_text=self.loc[lang]["msg_placeholder"], 
             font=info_font,
             height=32,
             border_color="#4B5563"
         )
         self.msg_entry.pack(fill="x", padx=20, pady=(0, 10))
-        self.msg_entry.insert(0, "时间到了！请起来活动一下，喝杯水休息一会吧！")
+        self.msg_entry.insert(0, self.loc[lang]["msg_default"])
         
         # Submit Button
         self.start_btn = ctk.CTkButton(
             form_frame,
-            text="➕ 添加并启动新任务",
+            text=self.loc[lang]["add_task"],
             command=self.on_start_clicked,
             font=label_font,
             height=36,
@@ -586,32 +688,32 @@ class TimerApp:
         controls_frame = ctk.CTkFrame(self.main_scroll_container, fg_color="transparent")
         controls_frame.pack(padx=30, fill="x", pady=(0, 5))
         
-        global_pause_btn = ctk.CTkButton(
+        self.global_pause_btn = ctk.CTkButton(
             controls_frame,
-            text="⏸ 暂停全部",
+            text=self.loc[lang]["pause_all"],
             font=info_font,
             height=26,
             fg_color="#374151",
             hover_color="#4B5563",
             command=self.global_pause
         )
-        global_pause_btn.pack(side="left", padx=(0, 5))
+        self.global_pause_btn.pack(side="left", padx=(0, 5))
         
-        global_resume_btn = ctk.CTkButton(
+        self.global_resume_btn = ctk.CTkButton(
             controls_frame,
-            text="▶ 恢复全部",
+            text=self.loc[lang]["resume_all"],
             font=info_font,
             height=26,
             fg_color="#10B981",
             hover_color="#059669",
             command=self.global_resume
         )
-        global_resume_btn.pack(side="left", padx=5)
+        self.global_resume_btn.pack(side="left", padx=5)
         
         # Standard active tasks container inside the global scroll frame (Option A)
         self.list_title_label = ctk.CTkLabel(
             self.main_scroll_container,
-            text="⏳ 当前活动任务与闹钟列表",
+            text=self.loc[lang]["list_title"],
             font=label_font,
             text_color="#E5E7EB"
         )
@@ -623,15 +725,116 @@ class TimerApp:
         )
         self.task_list_frame.pack(padx=30, fill="x", expand=True, pady=(0, 20))
         
+        # Floating Language Switch Button in the top-right corner of root, floating above scrollbar
+        self.lang_btn = ctk.CTkButton(
+            self.root,
+            text="EN" if lang == "zh" else "中",
+            width=50,
+            height=26,
+            fg_color="#1F2937",
+            hover_color="#374151",
+            text_color="#60A5FA",
+            border_width=1,
+            border_color="#4B5563",
+            corner_radius=13,
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            command=self.toggle_language
+        )
+        self.lang_btn.place(relx=1.0, rely=0.0, anchor="ne", x=-20, y=20)
+        self.lang_btn.lift()
+        
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
         
         # Initial Render & Loop Waking
         self.render_task_list()
         self.update_gui_status()
 
+    def toggle_language(self):
+        """Toggles active application language and updates all UI elements dynamically."""
+        self.current_lang = "en" if self.current_lang == "zh" else "zh"
+        self.save_config()
+        
+        # Update float toggle button text
+        self.lang_btn.configure(text="EN" if self.current_lang == "zh" else "中")
+        
+        # Retranslate all GUI components
+        self.retranslate_ui()
+
+    def retranslate_ui(self):
+        """Updates all visible texts in the UI to match self.current_lang."""
+        lang = self.current_lang
+        
+        # 1. Root window title
+        self.root.title(self.loc[lang]["title"])
+        
+        # 2. Header
+        self.title_label.configure(text=self.loc[lang]["title"])
+        self.subtitle_label.configure(text=self.loc[lang]["subtitle"])
+        
+        # 3. Segmented Button values and tab state
+        old_val = self.segmented_button.get()
+        if old_val in ("⏳ 定时器", "⏳ Timer"):
+            new_val = self.loc[lang]["tab_timer"]
+        else:
+            new_val = self.loc[lang]["tab_alarm"]
+            
+        self.segmented_button.configure(values=[self.loc[lang]["tab_timer"], self.loc[lang]["tab_alarm"]])
+        self.segmented_button.set(new_val)
+        
+        # 4. Form Timer / Alarm labels & placeholders
+        self.timer_duration_label.configure(text=self.loc[lang]["timer_duration"])
+        self.time_entry.configure(placeholder_text=self.loc[lang]["timer_placeholder"])
+        self.timer_loop_cb.configure(text=self.loc[lang]["timer_loop"])
+        
+        self.alarm_time_label.configure(text=self.loc[lang]["alarm_time"])
+        self.alarm_hour_entry.configure(placeholder_text=self.loc[lang]["alarm_hour_placeholder"])
+        self.alarm_minute_entry.configure(placeholder_text=self.loc[lang]["alarm_minute_placeholder"])
+        
+        self.repeat_label.configure(text=self.loc[lang]["repeat_cycle"])
+        self.everyday_cb.configure(text=self.loc[lang]["everyday"])
+        
+        # 5. Weekday checkboxes
+        weekdays = self.loc[lang]["weekdays"]
+        for idx, cb in enumerate(self.repeat_checkboxes):
+            cb.configure(text=weekdays[idx], width=42 if lang == "en" else 40)
+            
+        # 6. Message fields
+        self.msg_label.configure(text=self.loc[lang]["msg_label"])
+        
+        # Swap default content if unchanged
+        current_msg = self.msg_entry.get().strip()
+        old_default = self.loc["en" if lang == "zh" else "zh"]["msg_default"]
+        if current_msg == old_default:
+            self.msg_entry.delete(0, 'end')
+            self.msg_entry.insert(0, self.loc[lang]["msg_default"])
+            
+        self.msg_entry.configure(placeholder_text=self.loc[lang]["msg_placeholder"])
+        
+        # 7. Add Button
+        self.start_btn.configure(text=self.loc[lang]["add_task"])
+        
+        # 8. Global Controls & Titles
+        self.global_pause_btn.configure(text=self.loc[lang]["pause_all"])
+        self.global_resume_btn.configure(text=self.loc[lang]["resume_all"])
+        self.list_title_label.configure(text=self.loc[lang]["list_title"])
+        
+        # 9. Active Tasks and System Tray Menu
+        self.render_task_list()
+        
+        if self.tray_icon:
+            menu = pystray.Menu(
+                pystray.MenuItem(self.loc[lang]["tray_show"], self.show_window, default=True),
+                pystray.MenuItem(self.loc[lang]["tray_pause"], self.global_pause_tray),
+                pystray.MenuItem(self.loc[lang]["tray_resume"], self.global_resume_tray),
+                pystray.MenuItem(self.loc[lang]["tray_exit"], self.exit_app)
+            )
+            self.tray_icon.menu = menu
+            self.tray_icon.title = self.loc[lang]["tray_title"]
+
     def on_segmented_btn_changed(self, value):
         """Smoothly toggles sub-form inputs inside the frame."""
-        if value == "⏳ 定时器":
+        is_timer = (value == self.loc["zh"]["tab_timer"] or value == self.loc["en"]["tab_timer"])
+        if is_timer:
             self.alarm_fields_frame.pack_forget()
             self.timer_fields_frame.pack(fill="x", padx=20, pady=5)
         else: # ⏰ 闹钟
@@ -750,15 +953,19 @@ class TimerApp:
         """Validates inputs, appends a new task profile, and saves config."""
         current_tab = self.segmented_button.get()
         name_str = self.msg_entry.get().strip()
+        lang = self.current_lang
         if not name_str:
-            self.error_label.configure(text="❌ 请输入提醒内容！", text_color="#EF4444")
+            self.error_label.configure(text=self.loc[lang]["error_msg_empty"], text_color="#EF4444")
             return
             
-        if current_tab == "⏳ 定时器":
+        # Support segmented tab checks in both languages
+        is_timer_tab = (current_tab == self.loc["zh"]["tab_timer"] or current_tab == self.loc["en"]["tab_timer"])
+        
+        if is_timer_tab:
             time_str = self.time_entry.get().strip()
             minutes = self.validate_timer_duration(time_str)
             if minutes is None:
-                self.error_label.configure(text="❌ 循环时间必须是大于 0 的数字！", text_color="#EF4444")
+                self.error_label.configure(text=self.loc[lang]["error_timer_invalid"], text_color="#EF4444")
                 return
                 
             is_loop = self.timer_loop_var.get()
@@ -778,7 +985,7 @@ class TimerApp:
             m_raw = self.alarm_minute_entry.get().strip()
             alarm_time = self.validate_alarm_time(h_raw, m_raw)
             if alarm_time is None:
-                self.error_label.configure(text="❌ 闹钟时间格式无效！在小时和分钟框输入数字即可！", text_color="#EF4444")
+                self.error_label.configure(text=self.loc[lang]["error_alarm_invalid"], text_color="#EF4444")
                 return
                 
             repeat_days = []
@@ -804,7 +1011,7 @@ class TimerApp:
         self.save_config()
         
         # Display green success text
-        self.error_label.configure(text="✓ 任务添加并启动成功！", text_color="#10B981")
+        self.error_label.configure(text=self.loc[lang]["success_add"], text_color="#10B981")
         # Automatically fade out success message after 3 seconds
         self.root.after(3000, lambda: self.error_label.configure(text=""))
         
@@ -818,7 +1025,7 @@ class TimerApp:
         for _, var in self.repeat_vars:
             var.set(False)
         self.msg_entry.delete(0, 'end')
-        self.msg_entry.insert(0, "时间到了！请起来活动一下，喝杯水休息一会吧！")
+        self.msg_entry.insert(0, self.loc[lang]["msg_default"])
         
         # Redraw GUI Cards
         self.render_task_list()
@@ -838,10 +1045,11 @@ class TimerApp:
         with self.lock:
             tasks_copy = list(self.tasks)
             
+        lang = self.current_lang
         if not tasks_copy:
             empty_label = ctk.CTkLabel(
                 self.task_list_frame,
-                text="暂无运行中的定时任务，请在上方添加！",
+                text=self.loc[lang]["empty_list"],
                 font=ctk.CTkFont(family="Segoe UI", size=13),
                 text_color="#9CA3AF"
             )
@@ -884,7 +1092,7 @@ class TimerApp:
             # Clock Countdown Label
             time_label = ctk.CTkLabel(
                 card,
-                text="等待中...",
+                text=self.loc[lang]["status_waiting"],
                 font=ctk.CTkFont(family="Segoe UI", size=12),
                 text_color="#9CA3AF",
                 anchor="w"
@@ -935,6 +1143,7 @@ class TimerApp:
             tasks_copy = list(self.tasks)
             
         curr = time.time()
+        lang = self.current_lang
         for task in tasks_copy:
             task_id = task["id"]
             if task_id not in self.task_labels:
@@ -946,9 +1155,9 @@ class TimerApp:
                     rem = task["remaining_seconds"]
                     rem_min = int(rem // 60)
                     rem_sec = int(rem % 60)
-                    label.configure(text=f"暂停 (余 {rem_min}分{rem_sec}秒)", text_color="#F59E0B")
+                    label.configure(text=self.loc[lang]["status_paused_rem"].format(min=rem_min, sec=rem_sec), text_color="#F59E0B")
                 else:
-                    label.configure(text="已暂停", text_color="#F59E0B")
+                    label.configure(text=self.loc[lang]["status_paused"], text_color="#F59E0B")
             else:
                 if task["type"] == "timer":
                     remaining = task["target_time"] - curr
@@ -956,21 +1165,22 @@ class TimerApp:
                         remaining = 0
                     rem_min = int(remaining // 60)
                     rem_sec = int(remaining % 60)
-                    label.configure(text=f"剩余: {rem_min}分{rem_sec}秒", text_color="#10B981")
+                    label.configure(text=self.loc[lang]["status_rem"].format(min=rem_min, sec=rem_sec), text_color="#10B981")
                 else:
                     repeat_str = ""
                     if task["repeat_days"]:
                         if len(task["repeat_days"]) == 7:
-                            repeat_str = " (每天)"
+                            repeat_str = self.loc[lang]["repeat_everyday"]
                         elif set(task["repeat_days"]) == {1, 2, 3, 4, 5}:
-                            repeat_str = " (工作日)"
+                            repeat_str = self.loc[lang]["repeat_weekdays"]
                         elif set(task["repeat_days"]) == {6, 7}:
-                            repeat_str = " (周末)"
+                            repeat_str = self.loc[lang]["repeat_weekends"]
                         else:
-                            repeat_str = f" (周{','.join(map(str, task['repeat_days']))})"
+                            days_formatted = ",".join([self.loc[lang]["weekdays"][d-1] for d in task["repeat_days"]])
+                            repeat_str = self.loc[lang]["repeat_days_fmt"].format(days=days_formatted)
                     else:
-                        repeat_str = " (单次)"
-                    label.configure(text=f"目标: {task['alarm_time']}{repeat_str}", text_color="#10B981")
+                        repeat_str = self.loc[lang]["repeat_oneoff"]
+                    label.configure(text=self.loc[lang]["status_target"].format(time=task['alarm_time'], repeat=repeat_str), text_color="#10B981")
 
     def update_gui_status(self):
         """Thread-safe UI polling loop (ticks once per second if window is viewable)."""
@@ -1014,16 +1224,17 @@ class TimerApp:
 
     def run_tray_icon(self):
         """Starts pystray resident system tray in background thread."""
+        lang = self.current_lang
         menu = pystray.Menu(
-            pystray.MenuItem("显示设置 (Settings)", self.show_window, default=True),
-            pystray.MenuItem("全局暂停所有 (Pause All)", self.global_pause_tray),
-            pystray.MenuItem("全局恢复所有 (Resume All)", self.global_resume_tray),
-            pystray.MenuItem("退出 (Exit)", self.exit_app)
+            pystray.MenuItem(self.loc[lang]["tray_show"], self.show_window, default=True),
+            pystray.MenuItem(self.loc[lang]["tray_pause"], self.global_pause_tray),
+            pystray.MenuItem(self.loc[lang]["tray_resume"], self.global_resume_tray),
+            pystray.MenuItem(self.loc[lang]["tray_exit"], self.exit_app)
         )
         self.tray_icon = pystray.Icon(
             "NativeLoopTimer",
             self.icon_img,
-            "多任务原生定时中心",
+            self.loc[lang]["tray_title"],
             menu
         )
         self.tray_icon.run()
