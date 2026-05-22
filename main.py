@@ -1037,5 +1037,44 @@ class TimerApp:
 
 
 if __name__ == "__main__":
+    import socket
+    import sys
+    
+    # Try to bind to localhost on a specific port to ensure single instance
+    PORT = 49512
+    try:
+        instance_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        instance_socket.bind(('127.0.0.1', PORT))
+        instance_socket.listen(1)
+    except socket.error:
+        # Another instance is already running!
+        # Send a wake up signal to the existing instance
+        try:
+            wake_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            wake_socket.connect(('127.0.0.1', PORT))
+            wake_socket.sendall(b"show")
+            wake_socket.close()
+        except Exception:
+            pass
+        sys.exit(0)
+        
     app = TimerApp()
+    
+    # Start a thread to listen for wake-up requests from other instances
+    def wake_listener():
+        while True:
+            try:
+                conn, addr = instance_socket.accept()
+                data = conn.recv(1024)
+                if data == b"show":
+                    app.show_window()
+                conn.close()
+            except Exception:
+                break
+                
+    import threading
+    listener_thread = threading.Thread(target=wake_listener, daemon=True, name="InstanceWakeListener")
+    listener_thread.start()
+    
     app.start()
+
