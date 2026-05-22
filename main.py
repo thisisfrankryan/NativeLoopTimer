@@ -394,9 +394,24 @@ class TimerApp:
         label_font = ctk.CTkFont(family="Segoe UI", size=13, weight="bold")
         info_font = ctk.CTkFont(family="Segoe UI", size=12)
         
+        # Global Scroll Container
+        self.main_scroll_container = ctk.CTkScrollableFrame(
+            self.root,
+            fg_color="#111827",
+            corner_radius=0
+        )
+        self.main_scroll_container.pack(fill="both", expand=True, padx=0, pady=0)
+        
+        # Bind canvas configuration to auto-adjust scrollbar visibility
+        self.main_scroll_container._canvas.bind(
+            "<Configure>", 
+            lambda e: self.root.after(10, self.adjust_scrollbar_visibility), 
+            add="+"
+        )
+        
         # Header Box
         title_label = ctk.CTkLabel(
-            self.root, 
+            self.main_scroll_container, 
             text="⏰ 多任务原生定时中心", 
             font=title_font,
             text_color="#60A5FA"
@@ -404,7 +419,7 @@ class TimerApp:
         title_label.pack(pady=(20, 3))
         
         subtitle_label = ctk.CTkLabel(
-            self.root,
+            self.main_scroll_container,
             text="独立多任务并发 · 暂停/恢复管理 · 系统级防丢自唤醒",
             font=info_font,
             text_color="#9CA3AF"
@@ -412,7 +427,7 @@ class TimerApp:
         subtitle_label.pack(pady=(0, 15))
         
         # Main Creation Form Card
-        form_frame = ctk.CTkFrame(self.root, corner_radius=10, fg_color="#1F2937")
+        form_frame = ctk.CTkFrame(self.main_scroll_container, corner_radius=10, fg_color="#1F2937")
         form_frame.pack(padx=30, fill="x", pady=(0, 15))
         
         # Tab selection: Segmented Button
@@ -457,17 +472,48 @@ class TimerApp:
         # Sub-form 2: Alarm Fields (hidden initially)
         self.alarm_fields_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
         
-        alarm_label = ctk.CTkLabel(self.alarm_fields_frame, text="闹钟时间 (HH:MM):", font=label_font, text_color="#E5E7EB")
+        alarm_label = ctk.CTkLabel(self.alarm_fields_frame, text="闹钟时间:", font=label_font, text_color="#E5E7EB")
         alarm_label.pack(anchor="w", pady=(5, 2))
         
-        self.alarm_time_entry = ctk.CTkEntry(
-            self.alarm_fields_frame, 
-            placeholder_text="输入具体时刻 (如 08:30 或 14:00)", 
+        entry_row = ctk.CTkFrame(self.alarm_fields_frame, fg_color="transparent")
+        entry_row.pack(fill="x", pady=(0, 5))
+        
+        self.alarm_hour_entry = ctk.CTkEntry(
+            entry_row,
+            width=60,
+            placeholder_text="时",
             font=info_font,
             height=32,
-            border_color="#4B5563"
+            border_color="#4B5563",
+            justify="center"
         )
-        self.alarm_time_entry.pack(fill="x", pady=(0, 5))
+        self.alarm_hour_entry.pack(side="left")
+        
+        colon_label = ctk.CTkLabel(
+            entry_row, 
+            text=":", 
+            font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"), 
+            text_color="#9CA3AF"
+        )
+        colon_label.pack(side="left", padx=8)
+        
+        self.alarm_minute_entry = ctk.CTkEntry(
+            entry_row,
+            width=60,
+            placeholder_text="分",
+            font=info_font,
+            height=32,
+            border_color="#4B5563",
+            justify="center"
+        )
+        self.alarm_minute_entry.pack(side="left")
+        
+        # Key bindings for auto-tabbing and keyboard focus management
+        self.alarm_hour_entry.bind("<KeyRelease>", self.on_hour_keyrelease)
+        self.alarm_hour_entry.bind("<KeyPress>", self.on_hour_keypress)
+        self.alarm_minute_entry.bind("<KeyPress>", self.on_minute_keypress)
+        self.alarm_hour_entry.bind("<Return>", lambda e: self.on_start_clicked())
+        self.alarm_minute_entry.bind("<Return>", lambda e: self.on_start_clicked())
         
         repeat_label = ctk.CTkLabel(self.alarm_fields_frame, text="重复周期 (不勾选为单次):", font=label_font, text_color="#E5E7EB")
         repeat_label.pack(anchor="w", pady=(5, 2))
@@ -533,11 +579,11 @@ class TimerApp:
         self.start_btn.pack(padx=20, fill="x", pady=(5, 15))
         
         # Error / Validation Label
-        self.error_label = ctk.CTkLabel(self.root, text="", font=info_font, text_color="#EF4444")
+        self.error_label = ctk.CTkLabel(self.main_scroll_container, text="", font=info_font, text_color="#EF4444")
         self.error_label.pack(pady=(0, 5))
         
         # Middle List Section Label & Controls
-        controls_frame = ctk.CTkFrame(self.root, fg_color="transparent")
+        controls_frame = ctk.CTkFrame(self.main_scroll_container, fg_color="transparent")
         controls_frame.pack(padx=30, fill="x", pady=(0, 5))
         
         global_pause_btn = ctk.CTkButton(
@@ -562,17 +608,20 @@ class TimerApp:
         )
         global_resume_btn.pack(side="left", padx=5)
         
-        # Scrollable Active Task Cards List
-        self.task_list_frame = ctk.CTkScrollableFrame(
-            self.root,
-            label_text="⏳ 当前活动任务与闹钟列表",
-            label_font=label_font,
-            fg_color="#111827",
-            label_text_color="#E5E7EB",
-            corner_radius=10,
-            height=200
+        # Standard active tasks container inside the global scroll frame (Option A)
+        self.list_title_label = ctk.CTkLabel(
+            self.main_scroll_container,
+            text="⏳ 当前活动任务与闹钟列表",
+            font=label_font,
+            text_color="#E5E7EB"
         )
-        self.task_list_frame.pack(padx=30, fill="both", expand=True, pady=(0, 20))
+        self.list_title_label.pack(padx=30, anchor="w", pady=(10, 5))
+        
+        self.task_list_frame = ctk.CTkFrame(
+            self.main_scroll_container,
+            fg_color="transparent"
+        )
+        self.task_list_frame.pack(padx=30, fill="x", expand=True, pady=(0, 20))
         
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
         
@@ -607,8 +656,23 @@ class TimerApp:
         all_checked = all(var.get() for _, var in self.repeat_vars)
         self.everyday_var.set(all_checked)
 
-    def validate_alarm_time(self, time_str):
-        time_str = time_str.strip().replace(":", " ")
+    def validate_alarm_time(self, h_str, m_str=""):
+        h_str = h_str.strip()
+        m_str = m_str.strip()
+        
+        # Fallback for copy-pasting or combined input in the hour field:
+        if not m_str and (":" in h_str or " " in h_str or len(h_str) >= 3):
+            time_str = h_str
+        elif not m_str and len(h_str) in (1, 2) and h_str.isdigit():
+            time_str = h_str
+        else:
+            if not h_str:
+                return None
+            if not m_str:
+                m_str = "00"
+            time_str = f"{h_str} {m_str}"
+            
+        time_str = time_str.replace(":", " ")
         time_str = re.sub(r"\s+", " ", time_str)
         
         if time_str.isdigit():
@@ -634,6 +698,53 @@ class TimerApp:
         if 0 <= h <= 23 and 0 <= m <= 59:
             return f"{h:02d}:{m:02d}"
         return None
+
+    def on_hour_keyrelease(self, event):
+        val = self.alarm_hour_entry.get()
+        if " " in val:
+            self.alarm_hour_entry.delete(0, 'end')
+            self.alarm_hour_entry.insert(0, val.replace(" ", ""))
+            self.alarm_minute_entry.focus_set()
+            return
+            
+        if len(val.strip()) >= 2 and val.strip().isdigit():
+            self.alarm_minute_entry.focus_set()
+            self.alarm_minute_entry.select_range(0, 'end')
+            self.alarm_minute_entry.icursor('end')
+
+    def on_hour_keypress(self, event):
+        if event.keysym == "Right":
+            idx = self.alarm_hour_entry.index("insert")
+            if idx == len(self.alarm_hour_entry.get()):
+                self.alarm_minute_entry.focus_set()
+                self.alarm_minute_entry.icursor(0)
+
+    def on_minute_keypress(self, event):
+        val = self.alarm_minute_entry.get()
+        if event.keysym == "Backspace" and not val:
+            self.alarm_hour_entry.focus_set()
+            self.alarm_hour_entry.icursor('end')
+        elif event.keysym == "Left":
+            idx = self.alarm_minute_entry.index("insert")
+            if idx == 0:
+                self.alarm_hour_entry.focus_set()
+                self.alarm_hour_entry.icursor('end')
+
+    def adjust_scrollbar_visibility(self):
+        try:
+            canvas = self.main_scroll_container._canvas
+            scrollbar = self.main_scroll_container._scrollbar
+            canvas.update_idletasks()
+            bbox = canvas.bbox("all")
+            if bbox:
+                content_height = bbox[3] - bbox[1]
+                canvas_height = canvas.winfo_height()
+                if content_height <= canvas_height:
+                    scrollbar.grid_forget()
+                else:
+                    scrollbar.grid(row=0, column=1, sticky="ns", padx=(self.main_scroll_container._scrollbar_padx, 0))
+        except Exception as e:
+            print(f"[Scrollbar] Error adjusting scrollbar: {e}")
 
     def on_start_clicked(self):
         """Validates inputs, appends a new task profile, and saves config."""
@@ -663,10 +774,11 @@ class TimerApp:
                 "remaining_seconds": minutes * 60.0
             }
         else: # ⏰ 闹钟
-            time_raw = self.alarm_time_entry.get().strip()
-            alarm_time = self.validate_alarm_time(time_raw)
+            h_raw = self.alarm_hour_entry.get().strip()
+            m_raw = self.alarm_minute_entry.get().strip()
+            alarm_time = self.validate_alarm_time(h_raw, m_raw)
             if alarm_time is None:
-                self.error_label.configure(text="❌ 闹钟时间格式无效！如输 830 或 1400 即可自动格式化！", text_color="#EF4444")
+                self.error_label.configure(text="❌ 闹钟时间格式无效！在小时和分钟框输入数字即可！", text_color="#EF4444")
                 return
                 
             repeat_days = []
@@ -699,7 +811,8 @@ class TimerApp:
         # Reset form fields to default values
         self.time_entry.delete(0, 'end')
         self.time_entry.insert(0, "20.0")
-        self.alarm_time_entry.delete(0, 'end')
+        self.alarm_hour_entry.delete(0, 'end')
+        self.alarm_minute_entry.delete(0, 'end')
         self.timer_loop_var.set(True)
         self.everyday_var.set(False)
         for _, var in self.repeat_vars:
@@ -809,6 +922,9 @@ class TimerApp:
             
         # Request immediate visual redraw of ticking components
         self.tick_gui_status()
+        
+        # Dynamically recalculate content height and hide/show right scrollbar
+        self.root.after(50, self.adjust_scrollbar_visibility)
 
     def tick_gui_status(self):
         """Renders real-time ticking values on card labels."""
