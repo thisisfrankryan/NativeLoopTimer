@@ -930,7 +930,7 @@ class TimerApp:
             duration_entry.pack(fill="x", pady=(0, 8))
             duration_entry.insert(0, str(target_task["duration_minutes"]))
             
-            loop_var = ctk.BooleanVar(value=target_task.get("is_auto_loop", True))
+            loop_var = ctk.BooleanVar(value=True)
             loop_cb = ctk.CTkCheckBox(
                 timer_frame,
                 text=self.loc[lang]["timer_loop"],
@@ -2002,19 +2002,16 @@ class TimerApp:
             status_dot.grid(row=0, column=0, padx=(12, 4), pady=(12, 4), sticky="w")
             self.task_status_badges[task_id] = status_dot
             
-            # Name Label (directly in grid column 1)
-            name_text = task["name"]
-            if len(name_text) > 20:
-                name_text = name_text[:18] + "..."
-                
-            name_label = ctk.CTkLabel(
+            # Type Label (directly in grid column 1)
+            type_text = self.loc[lang]["tab_timer"] if task["type"] == "timer" else self.loc[lang]["tab_alarm"]
+            type_label = ctk.CTkLabel(
                 card,
-                text=name_text,
+                text=type_text,
                 font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-                text_color="#E5E7EB",
+                text_color="#9CA3AF",
                 anchor="w"
             )
-            name_label.grid(row=0, column=1, padx=(2, 8), pady=(12, 4), sticky="w")
+            type_label.grid(row=0, column=1, padx=(2, 8), pady=(12, 4), sticky="w")
             
             # Control Buttons Frame on the right side of the header
             btn_frame = ctk.CTkFrame(card, fg_color="transparent")
@@ -2087,7 +2084,19 @@ class TimerApp:
                 clock.pack()
                 self.task_hourglasses[task_id] = clock
             
-            # Clock Countdown / Status Label in Row 2 (spanning the entire width)
+            # User Remark/Name Label in Row 2 (below the circle)
+            remark_label = ctk.CTkLabel(
+                card,
+                text=task["name"],
+                font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+                text_color="#F3F4F6",
+                anchor="center",
+                justify="center",
+                wraplength=290
+            )
+            remark_label.grid(row=2, column=0, columnspan=3, padx=15, pady=(8, 2), sticky="ew")
+
+            # Clock Countdown / Status Label in Row 3 (spanning the entire width)
             time_label = ctk.CTkLabel(
                 card,
                 text=self.loc[lang]["status_waiting"],
@@ -2096,10 +2105,10 @@ class TimerApp:
                 anchor="center",
                 justify="center"
             )
-            time_label.grid(row=2, column=0, columnspan=3, padx=12, pady=(4, 10), sticky="ew")
+            time_label.grid(row=3, column=0, columnspan=3, padx=12, pady=(2, 10), sticky="ew")
             self.task_labels[task_id] = time_label
             
-            # Dynamic Card Progress Bar spanning all 3 columns in row 3 (bottom)
+            # Dynamic Card Progress Bar spanning all 3 columns in row 4 (bottom)
             progress_bar = ctk.CTkProgressBar(
                 card,
                 height=3,
@@ -2107,7 +2116,7 @@ class TimerApp:
                 fg_color="#374151",
                 progress_color="#10B981"
             )
-            progress_bar.grid(row=3, column=0, columnspan=3, sticky="ew", padx=12, pady=(0, 10))
+            progress_bar.grid(row=4, column=0, columnspan=3, sticky="ew", padx=12, pady=(0, 10))
             progress_bar.set(1.0)
             self.task_progress_bars[task_id] = progress_bar
             
