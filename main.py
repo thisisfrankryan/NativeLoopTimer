@@ -488,7 +488,11 @@ class TimerApp:
                 "tray_exit": "退出 (Exit)",
                 "tray_title": "多任务原生定时中心",
                 "pip_title": "画中画模式",
-                "pip_no_task": "暂无活动任务"
+                "pip_no_task": "暂无活动任务",
+                "edit_task_title": "编辑任务设置",
+                "edit_task_header": "✏️ 修改任务配置",
+                "dialog_cancel": "取消",
+                "dialog_save": "保存"
             },
             "en": {
                 "title": "⏰ Multi-Task Native Timer Center",
@@ -536,7 +540,11 @@ class TimerApp:
                 "tray_exit": "Exit",
                 "tray_title": "Multi-Task Native Timer Center",
                 "pip_title": "PiP Mode",
-                "pip_no_task": "No active task"
+                "pip_no_task": "No active task",
+                "edit_task_title": "Edit Task Settings",
+                "edit_task_header": "✏️ Edit Task Configuration",
+                "dialog_cancel": "Cancel",
+                "dialog_save": "Save"
             }
         }
         self.current_lang = "zh"
@@ -820,6 +828,367 @@ class TimerApp:
                     break
         self.save_config()
         self.render_task_list()
+
+    def edit_task(self, task_id):
+        """Opens a grab-focused, centered modal dialog to edit settings of an active task/alarm."""
+        with self.lock:
+            target_task = None
+            for t in self.tasks:
+                if t["id"] == task_id:
+                    target_task = t
+                    break
+                    
+        if not target_task:
+            return
+            
+        lang = self.current_lang
+        
+        dialog = ctk.CTkToplevel(self.root)
+        dialog.title(self.loc[lang]["edit_task_title"])
+        dialog.geometry("450x560")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.configure(fg_color="#111827")
+        dialog.grab_set()
+        
+        # Center relative to root
+        self.root.update_idletasks()
+        rx = self.root.winfo_x()
+        ry = self.root.winfo_y()
+        rw = self.root.winfo_width()
+        rh = self.root.winfo_height()
+        dw, dh = 450, 560
+        x = rx + (rw - dw) // 2
+        y = ry + (rh - dh) // 2
+        dialog.geometry(f"{dw}x{dh}+{x}+{y}")
+        
+        if pywinstyles:
+            try:
+                pywinstyles.apply_style(dialog, "acrylic")
+                pywinstyles.change_header_color(dialog, "#111827")
+                pywinstyles.change_title_color(dialog, "#60A5FA")
+            except Exception:
+                pass
+                
+        # Title Label
+        title_font = ctk.CTkFont(family="Segoe UI", size=16, weight="bold")
+        label_font = ctk.CTkFont(family="Segoe UI", size=13, weight="bold")
+        info_font = ctk.CTkFont(family="Segoe UI", size=12)
+        
+        header_lbl = ctk.CTkLabel(
+            dialog,
+            text=self.loc[lang]["edit_task_header"],
+            font=title_font,
+            text_color="#60A5FA"
+        )
+        header_lbl.pack(anchor="w", padx=25, pady=(15, 10))
+        
+        # Main form frame
+        form_frame = ctk.CTkFrame(
+            dialog,
+            corner_radius=12,
+            fg_color="#1E293B",
+            border_width=1,
+            border_color="#334155"
+        )
+        form_frame.pack(fill="both", expand=True, padx=25, pady=(0, 15))
+        
+        # 1. Remarks (Name) Textbox
+        name_lbl = ctk.CTkLabel(form_frame, text=self.loc[lang]["msg_label"], font=label_font, text_color="#E5E7EB")
+        name_lbl.pack(anchor="w", padx=20, pady=(12, 2))
+        
+        name_textbox = ctk.CTkTextbox(
+            form_frame,
+            font=info_font,
+            height=60,
+            border_color="#4B5563",
+            border_width=1
+        )
+        name_textbox.pack(fill="x", padx=20, pady=(0, 10))
+        name_textbox.insert("1.0", target_task["name"])
+        
+        # 2. Conditional Fields
+        dialog_repeat_vars = []
+        loop_var = None
+        duration_entry = None
+        h_entry = None
+        m_entry = None
+        
+        if target_task["type"] == "timer":
+            timer_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
+            timer_frame.pack(fill="x", padx=20, pady=5)
+            
+            duration_lbl = ctk.CTkLabel(timer_frame, text=self.loc[lang]["timer_duration"], font=label_font, text_color="#E5E7EB")
+            duration_lbl.pack(anchor="w", pady=(0, 2))
+            
+            duration_entry = ctk.CTkEntry(
+                timer_frame,
+                font=info_font,
+                height=32,
+                border_color="#4B5563"
+            )
+            duration_entry.pack(fill="x", pady=(0, 8))
+            duration_entry.insert(0, str(target_task["duration_minutes"]))
+            
+            loop_var = ctk.BooleanVar(value=target_task.get("is_auto_loop", True))
+            loop_cb = ctk.CTkCheckBox(
+                timer_frame,
+                text=self.loc[lang]["timer_loop"],
+                variable=loop_var,
+                font=info_font,
+                checkbox_width=18,
+                checkbox_height=18
+            )
+            loop_cb.pack(anchor="w", pady=(0, 5))
+            
+        else: # alarm
+            alarm_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
+            alarm_frame.pack(fill="x", padx=20, pady=5)
+            
+            time_lbl = ctk.CTkLabel(alarm_frame, text=self.loc[lang]["alarm_time"], font=label_font, text_color="#E5E7EB")
+            time_lbl.pack(anchor="w", pady=(0, 2))
+            
+            time_entry_row = ctk.CTkFrame(alarm_frame, fg_color="transparent")
+            time_entry_row.pack(fill="x", pady=(0, 8))
+            
+            h_val, m_val = target_task["alarm_time"].split(":")
+            
+            h_entry = ctk.CTkEntry(
+                time_entry_row,
+                width=60,
+                placeholder_text=self.loc[lang]["alarm_hour_placeholder"],
+                font=info_font,
+                height=32,
+                border_color="#4B5563",
+                justify="center"
+            )
+            h_entry.pack(side="left")
+            h_entry.insert(0, h_val)
+            
+            colon_lbl = ctk.CTkLabel(
+                time_entry_row,
+                text=":",
+                font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"),
+                text_color="#9CA3AF"
+            )
+            colon_lbl.pack(side="left", padx=8)
+            
+            m_entry = ctk.CTkEntry(
+                time_entry_row,
+                width=60,
+                placeholder_text=self.loc[lang]["alarm_minute_placeholder"],
+                font=info_font,
+                height=32,
+                border_color="#4B5563",
+                justify="center"
+            )
+            m_entry.pack(side="left")
+            m_entry.insert(0, m_val)
+            
+            def on_dialog_hour_keyrelease(event):
+                val = h_entry.get()
+                if " " in val:
+                    h_entry.delete(0, 'end')
+                    h_entry.insert(0, val.replace(" ", ""))
+                    m_entry.focus_set()
+                    return
+                if len(val.strip()) >= 2 and val.strip().isdigit():
+                    m_entry.focus_set()
+                    m_entry.select_range(0, 'end')
+                    m_entry.icursor('end')
+            
+            def on_dialog_hour_keypress(event):
+                if event.keysym == "Right":
+                    idx = h_entry.index("insert")
+                    if idx == len(h_entry.get()):
+                        m_entry.focus_set()
+                        m_entry.icursor(0)
+                        
+            def on_dialog_minute_keypress(event):
+                val = m_entry.get()
+                if event.keysym == "Backspace" and not val:
+                    h_entry.focus_set()
+                    h_entry.icursor('end')
+                elif event.keysym == "Left":
+                    idx = m_entry.index("insert")
+                    if idx == 0:
+                        h_entry.focus_set()
+                        h_entry.icursor('end')
+                        
+            h_entry.bind("<KeyRelease>", on_dialog_hour_keyrelease)
+            h_entry.bind("<KeyPress>", on_dialog_hour_keypress)
+            m_entry.bind("<KeyPress>", on_dialog_minute_keypress)
+            
+            rep_lbl = ctk.CTkLabel(alarm_frame, text=self.loc[lang]["repeat_cycle"], font=label_font, text_color="#E5E7EB")
+            rep_lbl.pack(anchor="w", pady=(0, 2))
+            
+            everyday_v = ctk.BooleanVar(value=False)
+            
+            def on_dialog_everyday_changed():
+                is_checked = everyday_v.get()
+                for _, var in dialog_repeat_vars:
+                    var.set(is_checked)
+                    
+            def on_dialog_day_changed():
+                all_checked = all(var.get() for _, var in dialog_repeat_vars)
+                everyday_v.set(all_checked)
+                
+            everyday_cb = ctk.CTkCheckBox(
+                alarm_frame,
+                text=self.loc[lang]["everyday"],
+                variable=everyday_v,
+                font=info_font,
+                checkbox_width=18,
+                checkbox_height=18,
+                command=on_dialog_everyday_changed
+            )
+            everyday_cb.pack(anchor="w", pady=(0, 5))
+            
+            days_row = ctk.CTkFrame(alarm_frame, fg_color="transparent")
+            days_row.pack(fill="x", pady=(0, 5))
+            
+            weekdays_labels = self.loc[lang]["weekdays"]
+            current_repeat_days = target_task.get("repeat_days", [])
+            
+            for i, day in enumerate(weekdays_labels):
+                day_num = i + 1
+                var = ctk.BooleanVar(value=(day_num in current_repeat_days))
+                cb = ctk.CTkCheckBox(
+                    days_row,
+                    text=day,
+                    variable=var,
+                    width=42 if lang == "en" else 40,
+                    checkbox_width=16,
+                    checkbox_height=16,
+                    font=info_font,
+                    border_width=2,
+                    command=on_dialog_day_changed
+                )
+                cb.pack(side="left", padx=1)
+                dialog_repeat_vars.append((day_num, var))
+                
+            if current_repeat_days and len(current_repeat_days) == 7:
+                everyday_v.set(True)
+                
+        # 3. Sound Selector
+        sound_lbl = ctk.CTkLabel(form_frame, text=self.loc[lang]["sound_label"], font=label_font, text_color="#E5E7EB")
+        sound_lbl.pack(anchor="w", padx=20, pady=(8, 2))
+        
+        sound_combo = ctk.CTkComboBox(
+            form_frame,
+            values=list(self.sound_options[lang].keys()),
+            font=info_font,
+            height=32,
+            state="readonly"
+        )
+        sound_combo.pack(fill="x", padx=20, pady=(0, 8))
+        
+        current_sound_path = target_task.get("sound_path", "")
+        selected_sound_key = None
+        for k, v in self.sound_options[lang].items():
+            if v == current_sound_path:
+                selected_sound_key = k
+                break
+        if selected_sound_key is None:
+            selected_sound_key = "🔔 系统默认 (System Default)" if lang == "zh" else "🔔 System Default"
+        sound_combo.set(selected_sound_key)
+        
+        def on_dialog_sound_selected(val):
+            s_path = self.sound_options[lang].get(val, "C:/Windows/Media/Windows Default.wav")
+            try:
+                winsound.PlaySound(None, winsound.SND_PURGE)
+                if os.path.exists(s_path):
+                    winsound.PlaySound(s_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                else:
+                    winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
+            except Exception:
+                pass
+                
+        sound_combo.configure(command=on_dialog_sound_selected)
+        
+        # 4. Error / Validation Label
+        dialog_error_lbl = ctk.CTkLabel(form_frame, text="", font=info_font, text_color="#EF4444")
+        dialog_error_lbl.pack(pady=(5, 5))
+        
+        # 5. Buttons row
+        btn_row = ctk.CTkFrame(form_frame, fg_color="transparent")
+        btn_row.pack(fill="x", padx=20, pady=(5, 12))
+        
+        cancel_btn = ctk.CTkButton(
+            btn_row,
+            text=self.loc[lang]["dialog_cancel"],
+            font=label_font,
+            height=32,
+            fg_color="#374151",
+            hover_color="#4B5563",
+            command=dialog.destroy
+        )
+        cancel_btn.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        
+        def save_edits():
+            name_val = name_textbox.get("1.0", "end-1c").strip()
+            if not name_val:
+                dialog_error_lbl.configure(text=self.loc[lang]["error_msg_empty"], text_color="#EF4444")
+                return
+                
+            selected_s = sound_combo.get()
+            s_path = self.sound_options[lang].get(selected_s, "C:/Windows/Media/Windows Default.wav")
+            
+            if target_task["type"] == "timer":
+                dur_val = duration_entry.get().strip()
+                minutes = self.validate_timer_duration(dur_val)
+                if minutes is None:
+                    dialog_error_lbl.configure(text=self.loc[lang]["error_timer_invalid"], text_color="#EF4444")
+                    return
+                    
+                with self.lock:
+                    target_task["name"] = name_val
+                    target_task["sound_path"] = s_path
+                    target_task["is_auto_loop"] = loop_var.get()
+                    
+                    if abs(target_task["duration_minutes"] - minutes) > 1e-5:
+                        target_task["duration_minutes"] = minutes
+                        target_task["remaining_seconds"] = minutes * 60.0
+                        if not target_task["is_paused"]:
+                            target_task["target_time"] = time.time() + target_task["remaining_seconds"]
+                            
+            else: # alarm
+                h_val = h_entry.get().strip()
+                m_val = m_entry.get().strip()
+                alarm_time = self.validate_alarm_time(h_val, m_val)
+                if alarm_time is None:
+                    dialog_error_lbl.configure(text=self.loc[lang]["error_alarm_invalid"], text_color="#EF4444")
+                    return
+                    
+                rep_days = []
+                for day_num, var in dialog_repeat_vars:
+                    if var.get():
+                        rep_days.append(day_num)
+                        
+                with self.lock:
+                    target_task["name"] = name_val
+                    target_task["sound_path"] = s_path
+                    
+                    if target_task["alarm_time"] != alarm_time or target_task["repeat_days"] != rep_days:
+                        target_task["alarm_time"] = alarm_time
+                        target_task["repeat_days"] = rep_days
+                        if not target_task["is_paused"]:
+                            target_task["target_time"] = calculate_next_alarm(alarm_time, rep_days)
+                            
+            self.save_config()
+            self.render_task_list()
+            dialog.destroy()
+            
+        save_btn = ctk.CTkButton(
+            btn_row,
+            text=self.loc[lang]["dialog_save"],
+            font=label_font,
+            height=32,
+            fg_color="#2563EB",
+            hover_color="#1D4ED8",
+            command=save_edits
+        )
+        save_btn.pack(side="right", fill="x", expand=True)
 
     def global_pause(self):
         """Pauses all currently running tasks."""
@@ -1160,17 +1529,17 @@ class TimerApp:
  
         # Common Input: Message Text
         self.msg_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["msg_label"], font=label_font, text_color="#E5E7EB")
-        self.msg_label.pack(anchor="w", padx=20, pady=(5, 2))
+        self.msg_label.pack(anchor="w", padx=20, pady=(15, 2))
         
-        self.msg_entry = ctk.CTkEntry(
+        self.msg_entry = ctk.CTkTextbox(
             form_frame, 
-            placeholder_text=self.loc[lang]["msg_placeholder"], 
             font=info_font,
-            height=32,
-            border_color="#4B5563"
+            height=60,
+            border_color="#4B5563",
+            border_width=1
         )
-        self.msg_entry.pack(fill="x", padx=20, pady=(0, 10))
-        self.msg_entry.insert(0, self.loc[lang]["msg_default"])
+        self.msg_entry.pack(fill="x", padx=20, pady=(0, 15))
+        self.msg_entry.insert("1.0", self.loc[lang]["msg_default"])
         
 
         
@@ -1302,13 +1671,11 @@ class TimerApp:
         self.msg_label.configure(text=self.loc[lang]["msg_label"])
         
         # Swap default content if unchanged
-        current_msg = self.msg_entry.get().strip()
+        current_msg = self.msg_entry.get("1.0", "end-1c").strip()
         old_default = self.loc["en" if lang == "zh" else "zh"]["msg_default"]
         if current_msg == old_default:
-            self.msg_entry.delete(0, 'end')
-            self.msg_entry.insert(0, self.loc[lang]["msg_default"])
-            
-        self.msg_entry.configure(placeholder_text=self.loc[lang]["msg_placeholder"])
+            self.msg_entry.delete("1.0", "end")
+            self.msg_entry.insert("1.0", self.loc[lang]["msg_default"])
         
         # 7. Add Buttons
         self.timer_start_btn.configure(text=self.loc[lang]["add_task_short"])
@@ -1498,7 +1865,7 @@ class TimerApp:
     def on_start_clicked(self):
         """Validates inputs, appends a new task profile, and saves config."""
         current_tab = self.segmented_button.get()
-        name_str = self.msg_entry.get().strip()
+        name_str = self.msg_entry.get("1.0", "end-1c").strip()
         lang = self.current_lang
         if not name_str:
             self.error_label.configure(text=self.loc[lang]["error_msg_empty"], text_color="#EF4444")
@@ -1577,8 +1944,8 @@ class TimerApp:
         for _, var in self.repeat_vars:
             var.set(False)
         self.sound_combobox.set("🔔 经典闹铃 (Classic Alarm)" if lang == "zh" else "🔔 Classic Alarm")
-        self.msg_entry.delete(0, 'end')
-        self.msg_entry.insert(0, self.loc[lang]["msg_default"])
+        self.msg_entry.delete("1.0", "end")
+        self.msg_entry.insert("1.0", self.loc[lang]["msg_default"])
         
         # Redraw GUI Cards
         self.render_task_list()
@@ -1680,6 +2047,19 @@ class TimerApp:
                 command=lambda tid=task_id: self.reset_task(tid)
             )
             reset_btn.pack(side="left", padx=2)
+            
+            # Edit Icon trigger
+            edit_btn = ctk.CTkButton(
+                btn_frame,
+                text="✏️",
+                width=28,
+                height=28,
+                fg_color="#374151",
+                hover_color="#3B82F6",
+                corner_radius=6,
+                command=lambda tid=task_id: self.edit_task(tid)
+            )
+            edit_btn.pack(side="left", padx=2)
             
             # Trash Icon trigger
             delete_btn = ctk.CTkButton(
