@@ -102,62 +102,69 @@ class PowerMonitor:
         return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
 
 
-class CTkHourglass(tk.Canvas):
-    def __init__(self, parent, size=28, bg_color="#1E293B", sand_color="#10B981"):
+class CTkCircularTimer(tk.Canvas):
+    def __init__(self, parent, size=280, bg_color="#1E293B", color="#10B981"):
         super().__init__(parent, width=size, height=size, bg=bg_color, highlightthickness=0)
         self.size = size
-        self.sand_color = sand_color
+        self.color = color
         self.ratio = 1.0
         self.is_paused = False
+        self.time_str = "00:00"
+        self.bg_color = bg_color
         self.draw()
 
-    def set_progress(self, ratio, is_paused=False, color=None):
+    def set_progress(self, ratio, is_paused=False, color=None, time_str="00:00"):
         self.ratio = max(0.0, min(1.0, ratio))
         self.is_paused = is_paused
         if color:
-            self.sand_color = color
+            self.color = color
+        self.time_str = time_str
         self.draw()
 
     def draw(self):
         self.delete("all")
         s = self.size
-        pad = s * 0.08
         cx = s / 2
         cy = s / 2
         
-        top_y = pad + s * 0.05
-        bot_y = s - pad - s * 0.05
-        neck_y = cy
-        neck_w = s * 0.1
+        # Radii definitions
+        outer_r = (s / 2) - 15  # Outer border ring radius
+        inner_max_r = outer_r - 10  # Max radius of the shrinking solid circle
         
-        # Draw sand in the top bulb (shrinking as ratio goes from 1.0 down to 0.0)
+        # Define high-end soft dual-tone color mapping
+        # Green: ring #10B981, shrinking circle #064E3B
+        # Yellow: ring #F59E0B, shrinking circle #78350F
+        # Red: ring #EF4444, shrinking circle #7F1D1D
+        ring_color = self.color
+        if self.color == "#10B981": # Green
+            fill_color = "#064E3B"
+        elif self.color == "#F59E0B": # Yellow
+            fill_color = "#78350F"
+        elif self.color == "#EF4444": # Red
+            fill_color = "#7F1D1D"
+        else:
+            fill_color = "#1E3A8A" # Fallback deep blue
+            
+        # 1. Draw outer background ring track (slate gray)
+        self.create_oval(cx - outer_r, cy - outer_r, cx + outer_r, cy + outer_r, 
+                         outline="#334155", width=4)
+                         
+        # 2. Draw active progress circular arc (winding down from 360 to 0 degrees)
+        extent = -360.0 * self.ratio
+        if extent != 0:
+            self.create_arc(cx - outer_r, cy - outer_r, cx + outer_r, cy + outer_r,
+                            start=90, extent=extent, style="arc", outline=ring_color, width=6)
+                            
+        # 3. Draw the shrinking solid inner circle (radius is proportional to self.ratio)
         if self.ratio > 0.0:
-            sand_top_y = top_y + (1.0 - self.ratio) * (cy - top_y)
-            x_left = pad + (1.0 - self.ratio) * (cx - neck_w/2 - pad)
-            x_right = (s - pad) - (1.0 - self.ratio) * ((s - pad) - (cx + neck_w/2))
-            self.create_polygon(x_left, sand_top_y, x_right, sand_top_y, cx+neck_w/2, cy, cx-neck_w/2, cy, fill=self.sand_color, outline="")
-
-        # Draw sand in the bottom bulb (rising as elapsed ratio goes from 0.0 up to 1.0)
-        elapsed = 1.0 - self.ratio
-        if elapsed > 0.0:
-            sand_bot_top_y = bot_y - elapsed * (bot_y - cy)
-            x_left = pad + (1.0 - elapsed) * (cx - neck_w/2 - pad)
-            x_right = (s - pad) - (1.0 - elapsed) * ((s - pad) - (cx + neck_w/2))
-            self.create_polygon(cx-neck_w/2, cy, cx+neck_w/2, cy, x_right, sand_bot_top_y, x_left, sand_bot_top_y, fill=self.sand_color, outline="")
-            
-        # Draw the falling sand stream if running and has sand left to fall
-        if not self.is_paused and self.ratio > 0.0 and self.ratio < 1.0:
-            self.create_line(cx, cy, cx, bot_y - elapsed * (bot_y - cy), fill=self.sand_color, width=max(1.5, s * 0.03))
-            
-        # Draw the physical wooden/metal plates
-        self.create_line(pad, top_y, s-pad, top_y, fill="#64748B", width=max(2.0, s * 0.05), capstyle="round") # Top
-        self.create_line(pad, bot_y, s-pad, bot_y, fill="#64748B", width=max(2.0, s * 0.05), capstyle="round") # Bottom
-        
-        # Draw the outer glass diagonals
-        self.create_line(pad, top_y, cx-neck_w/2, cy, fill="#475569", width=max(1.0, s * 0.02))
-        self.create_line(s-pad, top_y, cx+neck_w/2, cy, fill="#475569", width=max(1.0, s * 0.02))
-        self.create_line(cx-neck_w/2, cy, pad, bot_y, fill="#475569", width=max(1.0, s * 0.02))
-        self.create_line(cx+neck_w/2, cy, s-pad, bot_y, fill="#475569", width=max(1.0, s * 0.02))
+            inner_r = inner_max_r * self.ratio
+            self.create_oval(cx - inner_r, cy - inner_r, cx + inner_r, cy + inner_r,
+                             fill=fill_color, outline="")
+                             
+        # 4. Draw the centered countdown time text
+        font_size = int(s * 0.12)
+        self.create_text(cx, cy, text=self.time_str, fill="#FFFFFF", 
+                         font=("Segoe UI", font_size, "bold"))
 
 
 class CTkAlarmClock(tk.Canvas):
@@ -1618,23 +1625,20 @@ class TimerApp:
             )
             self.task_card_widgets[task_id] = card
             
-            card.grid_columnconfigure(0, weight=0) # Badge
-            card.grid_columnconfigure(1, weight=1) # Icon + Name
-            card.grid_columnconfigure(2, weight=1) # Dynamic Timer Display
-            card.grid_columnconfigure(3, weight=0) # Controls: Pause
-            card.grid_columnconfigure(4, weight=0) # Controls: Reset
-            card.grid_columnconfigure(5, weight=0) # Controls: Trash
+            card.grid_columnconfigure(0, weight=0) # Badge LED
+            card.grid_columnconfigure(1, weight=1) # Task Name
+            card.grid_columnconfigure(2, weight=0) # Control Buttons Frame
             
             # Status Indicator LED
             status_color = "#10B981" if not task["is_paused"] else "#F59E0B"
             status_dot = ctk.CTkLabel(card, text="●", text_color=status_color, font=("Segoe UI", 16))
-            status_dot.grid(row=0, column=0, padx=(12, 6), pady=8)
+            status_dot.grid(row=0, column=0, padx=(12, 4), pady=(12, 4), sticky="w")
             self.task_status_badges[task_id] = status_dot
             
             # Name Label (directly in grid column 1)
             name_text = task["name"]
-            if len(name_text) > 12:
-                name_text = name_text[:10] + "..."
+            if len(name_text) > 20:
+                name_text = name_text[:18] + "..."
                 
             name_label = ctk.CTkLabel(
                 card,
@@ -1643,37 +1647,17 @@ class TimerApp:
                 text_color="#E5E7EB",
                 anchor="w"
             )
-            name_label.grid(row=0, column=1, padx=5, pady=8, sticky="w")
+            name_label.grid(row=0, column=1, padx=(2, 8), pady=(12, 4), sticky="w")
             
-            # Massive visual sand hourglass / alarm clock in its own row centered
-            canvas_frame = ctk.CTkFrame(card, fg_color="transparent")
-            canvas_frame.grid(row=1, column=0, columnspan=6, padx=12, pady=(5, 10))
-            
-            if task["type"] == "timer":
-                hglass = CTkHourglass(canvas_frame, size=280, bg_color="#1E293B")
-                hglass.pack()
-                self.task_hourglasses[task_id] = hglass
-            else:
-                clock = CTkAlarmClock(canvas_frame, size=280, bg_color="#1E293B")
-                clock.pack()
-                self.task_hourglasses[task_id] = clock
-            
-            # Clock Countdown Label
-            time_label = ctk.CTkLabel(
-                card,
-                text=self.loc[lang]["status_waiting"],
-                font=ctk.CTkFont(family="Segoe UI", size=12),
-                text_color="#9CA3AF",
-                anchor="w"
-            )
-            time_label.grid(row=0, column=2, padx=5, pady=8, sticky="w")
-            self.task_labels[task_id] = time_label
+            # Control Buttons Frame on the right side of the header
+            btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+            btn_frame.grid(row=0, column=2, padx=(4, 12), pady=(12, 4), sticky="e")
             
             # Play/Pause Icon trigger
             btn_text = "⏸" if not task["is_paused"] else "▶"
             btn_fg = "#374151" if not task["is_paused"] else "#10B981"
             pause_btn = ctk.CTkButton(
-                card,
+                btn_frame,
                 text=btn_text,
                 width=28,
                 height=28,
@@ -1682,11 +1666,11 @@ class TimerApp:
                 corner_radius=6,
                 command=lambda tid=task_id: self.toggle_task(tid)
             )
-            pause_btn.grid(row=0, column=3, padx=4, pady=8)
+            pause_btn.pack(side="left", padx=2)
             
             # Reset Icon trigger
             reset_btn = ctk.CTkButton(
-                card,
+                btn_frame,
                 text="🔄",
                 width=28,
                 height=28,
@@ -1695,11 +1679,11 @@ class TimerApp:
                 corner_radius=6,
                 command=lambda tid=task_id: self.reset_task(tid)
             )
-            reset_btn.grid(row=0, column=4, padx=4, pady=8)
+            reset_btn.pack(side="left", padx=2)
             
             # Trash Icon trigger
             delete_btn = ctk.CTkButton(
-                card,
+                btn_frame,
                 text="🗑",
                 width=28,
                 height=28,
@@ -1708,9 +1692,34 @@ class TimerApp:
                 corner_radius=6,
                 command=lambda tid=task_id: self.delete_task(tid)
             )
-            delete_btn.grid(row=0, column=5, padx=(4, 12), pady=8)
+            delete_btn.pack(side="left", padx=2)
             
-            # Dynamic Card Progress Bar spanning all 6 columns in row 2 (bottom)
+            # Massive visual sand hourglass / alarm clock in its own row centered
+            canvas_frame = ctk.CTkFrame(card, fg_color="transparent")
+            canvas_frame.grid(row=1, column=0, columnspan=3, padx=12, pady=(5, 5))
+            
+            if task["type"] == "timer":
+                ctimer = CTkCircularTimer(canvas_frame, size=280, bg_color="#1E293B")
+                ctimer.pack()
+                self.task_hourglasses[task_id] = ctimer
+            else:
+                clock = CTkAlarmClock(canvas_frame, size=280, bg_color="#1E293B")
+                clock.pack()
+                self.task_hourglasses[task_id] = clock
+            
+            # Clock Countdown / Status Label in Row 2 (spanning the entire width)
+            time_label = ctk.CTkLabel(
+                card,
+                text=self.loc[lang]["status_waiting"],
+                font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+                text_color="#9CA3AF",
+                anchor="center",
+                justify="center"
+            )
+            time_label.grid(row=2, column=0, columnspan=3, padx=12, pady=(4, 10), sticky="ew")
+            self.task_labels[task_id] = time_label
+            
+            # Dynamic Card Progress Bar spanning all 3 columns in row 3 (bottom)
             progress_bar = ctk.CTkProgressBar(
                 card,
                 height=3,
@@ -1718,7 +1727,7 @@ class TimerApp:
                 fg_color="#374151",
                 progress_color="#10B981"
             )
-            progress_bar.grid(row=2, column=0, columnspan=6, sticky="ew", padx=12, pady=(0, 10))
+            progress_bar.grid(row=3, column=0, columnspan=3, sticky="ew", padx=12, pady=(0, 10))
             progress_bar.set(1.0)
             self.task_progress_bars[task_id] = progress_bar
             
@@ -1762,7 +1771,8 @@ class TimerApp:
                         pbar.set(ratio)
                         pbar.configure(progress_color="#F59E0B")
                     if hglass_or_clock:
-                        hglass_or_clock.set_progress(ratio, is_paused=True, color="#F59E0B")
+                        time_str = f"{rem_min:02d}:{rem_sec:02d}"
+                        hglass_or_clock.set_progress(ratio, is_paused=True, color="#F59E0B", time_str=time_str)
                 else:
                     label.configure(text=self.loc[lang]["status_paused"], text_color="#F59E0B")
                     if pbar:
@@ -1793,7 +1803,8 @@ class TimerApp:
                         pbar.set(ratio)
                         pbar.configure(progress_color=progress_color)
                     if hglass_or_clock:
-                        hglass_or_clock.set_progress(ratio, is_paused=False, color=progress_color)
+                        time_str = f"{rem_min:02d}:{rem_sec:02d}"
+                        hglass_or_clock.set_progress(ratio, is_paused=False, color=progress_color, time_str=time_str)
                 else:
                     repeat_str = ""
                     if task["repeat_days"]:
