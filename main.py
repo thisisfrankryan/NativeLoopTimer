@@ -7,6 +7,7 @@ import ctypes
 import json
 import uuid
 import re
+import winsound
 from PIL import Image, ImageDraw
 import pystray
 import customtkinter as ctk
@@ -95,6 +96,199 @@ class PowerMonitor:
         return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
 
 
+class PiPWindow(ctk.CTkToplevel):
+    def __init__(self, parent_app):
+        super().__init__(parent_app.root)
+        self.app = parent_app
+        
+        # Window setup
+        self.title("PiP Mode")
+        self.overrideredirect(True) # Borderless
+        self.attributes("-topmost", True) # Always on top
+        self.attributes("-alpha", 0.85) # Transparent
+        
+        # Background color matching our dark aesthetic
+        self.configure(fg_color="#1F2937")
+        
+        # Position in bottom-right corner of screen
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = screen_width - 220
+        y = screen_height - 120
+        self.geometry(f"200x70+{x}+{y}")
+        
+        # Drag bindings
+        self._drag_data = (0, 0)
+        self.bind("<Button-1>", self.start_drag)
+        self.bind("<B1-Motion>", self.on_drag)
+        
+        # Main layout frame
+        self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.content_frame.pack(fill="both", expand=True, padx=8, pady=6)
+        
+        # Top half: Task name & Icon
+        self.task_label = ctk.CTkLabel(
+            self.content_frame, 
+            text="No active task", 
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            text_color="#E5E7EB",
+            anchor="w"
+        )
+        self.task_label.pack(side="top", anchor="w", fill="x")
+        
+        # Bottom half: Timer countdown and Controls row
+        self.bottom_row = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+        self.bottom_row.pack(side="top", fill="x", pady=(2, 0))
+        
+        self.time_label = ctk.CTkLabel(
+            self.bottom_row,
+            text="00:00",
+            font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"),
+            text_color="#10B981",
+            anchor="w"
+        )
+        self.time_label.pack(side="left", anchor="w")
+        
+        # Action buttons on the right side of the bottom row
+        btn_frame = ctk.CTkFrame(self.bottom_row, fg_color="transparent")
+        btn_frame.pack(side="right", fill="y")
+        
+        self.play_btn = ctk.CTkButton(
+            btn_frame,
+            text="⏸",
+            width=22,
+            height=22,
+            fg_color="#374151",
+            hover_color="#4B5563",
+            corner_radius=4,
+            font=("Segoe UI", 10),
+            command=self.toggle_active_task
+        )
+        self.play_btn.pack(side="left", padx=2)
+        
+        self.reset_btn = ctk.CTkButton(
+            btn_frame,
+            text="🔄",
+            width=22,
+            height=22,
+            fg_color="#374151",
+            hover_color="#4B5563",
+            corner_radius=4,
+            font=("Segoe UI", 10),
+            command=self.reset_active_task
+        )
+        self.reset_btn.pack(side="left", padx=2)
+        
+        self.unpin_btn = ctk.CTkButton(
+            btn_frame,
+            text="↩",
+            width=22,
+            height=22,
+            fg_color="#374151",
+            hover_color="#60A5FA",
+            text_color="#60A5FA",
+            corner_radius=4,
+            font=("Segoe UI", 10, "bold"),
+            command=self.close_pip
+        )
+        self.unpin_btn.pack(side="left", padx=2)
+        
+        # Start update cycle
+        self.update_pip()
+
+    def start_drag(self, event):
+        self._drag_data = (event.x_root, event.y_root)
+        
+    def on_drag(self, event):
+        delta_x = event.x_root - self._drag_data[0]
+        delta_y = event.y_root - self._drag_data[1]
+        x = self.winfo_x() + delta_x
+        y = self.winfo_y() + delta_y
+        self.geometry(f"+{x}+{y}")
+        self._drag_data = (event.x_root, event.y_root)
+
+    def get_active_task(self):
+        with self.app.lock:
+            if not self.app.tasks:
+                return None
+            for t in self.app.tasks:
+                if t["type"] == "timer" and not t["is_paused"]:
+                    return t
+            for t in self.app.tasks:
+                if t["type"] == "alarm" and not t["is_paused"]:
+                    return t
+            for t in self.app.tasks:
+                if t["type"] == "timer" and t["is_paused"]:
+                    return t
+            for t in self.app.tasks:
+                if t["type"] == "alarm" and t["is_paused"]:
+                    return t
+            return self.app.tasks[0]
+
+    def update_pip(self):
+        if not self.winfo_exists():
+            return
+            
+        task = self.get_active_task()
+        lang = self.app.current_lang
+        
+        if not task:
+            self.task_label.configure(text=self.app.loc[lang]["empty_list"][:18])
+            self.time_label.configure(text="--:--", text_color="#9CA3AF")
+            self.play_btn.configure(state="disabled")
+            self.reset_btn.configure(state="disabled")
+        else:
+            self.play_btn.configure(state="normal")
+            self.reset_btn.configure(state="normal")
+            
+            icon = "⏳" if task["type"] == "timer" else "⏰"
+            name = task["name"]
+            if len(name) > 10:
+                name = name[:8] + "..."
+            self.task_label.configure(text=f"{icon} {name}")
+            
+            btn_text = "⏸" if not task["is_paused"] else "▶"
+            btn_fg = "#374151" if not task["is_paused"] else "#10B981"
+            self.play_btn.configure(text=btn_text, fg_color=btn_fg)
+            
+            curr = time.time()
+            if task["is_paused"]:
+                if task["type"] == "timer":
+                    rem = task["remaining_seconds"]
+                    rem_min = int(rem // 60)
+                    rem_sec = int(rem % 60)
+                    self.time_label.configure(text=f"{rem_min:02d}:{rem_sec:02d}", text_color="#F59E0B")
+                else:
+                    self.time_label.configure(text=self.app.loc[lang]["status_paused"][:6], text_color="#F59E0B")
+            else:
+                if task["type"] == "timer":
+                    remaining = task["target_time"] - curr
+                    if remaining < 0:
+                        remaining = 0
+                    rem_min = int(remaining // 60)
+                    rem_sec = int(remaining % 60)
+                    self.time_label.configure(text=f"{rem_min:02d}:{rem_sec:02d}", text_color="#10B981" if remaining >= 60.0 else "#EF4444")
+                else:
+                    self.time_label.configure(text=task["alarm_time"], text_color="#10B981")
+                    
+        self.after(500, self.update_pip)
+
+    def toggle_active_task(self):
+        task = self.get_active_task()
+        if task:
+            self.app.toggle_task(task["id"])
+            
+    def reset_active_task(self):
+        task = self.get_active_task()
+        if task:
+            self.app.reset_task(task["id"])
+            
+    def close_pip(self):
+        self.app.pip_window = None
+        self.destroy()
+        self.app.show_window()
+
+
 class TimerApp:
     def __init__(self):
         # Default state
@@ -110,6 +304,8 @@ class TimerApp:
         # UI task tracking to update text in real-time without flickering
         self.task_labels = {}
         self.task_status_badges = {}
+        self.task_progress_bars = {}
+        self.pip_window = None
         
         # Paths
         self.app_dir = os.path.dirname(os.path.abspath(sys.argv[0] if getattr(sys, 'frozen', False) else __file__))
@@ -141,6 +337,7 @@ class TimerApp:
                 "list_title": "⏳ 当前活动任务与闹钟列表",
                 "empty_list": "暂无运行中的定时任务，请在上方添加！",
                 "error_msg_empty": "❌ 请输入提醒内容！",
+                "sound_label": "🔔 响铃提示音选择:",
                 "error_timer_invalid": "❌ 循环时间必须是大于 0 的数字！",
                 "error_alarm_invalid": "❌ 闹钟时间格式无效！在小时 and 分钟框输入数字即可！",
                 "success_add": "✓ 任务添加并启动成功！",
@@ -185,6 +382,7 @@ class TimerApp:
                 "list_title": "⏳ Active Tasks & Alarms List",
                 "empty_list": "No active tasks. Add a new one above!",
                 "error_msg_empty": "❌ Please enter the alert message!",
+                "sound_label": "🔔 Alert Sound Selector:",
                 "error_timer_invalid": "❌ Countdown duration must be a number greater than 0!",
                 "error_alarm_invalid": "❌ Invalid alarm time format! Just enter numbers in the hour and minute boxes!",
                 "success_add": "✓ Task added and started successfully!",
@@ -208,6 +406,28 @@ class TimerApp:
             }
         }
         self.current_lang = "zh"
+        
+        # Bilingual sound selections mapped to high-quality Windows pre-installed media chimes
+        self.sound_options = {
+            "zh": {
+                "🔔 经典闹铃 (Classic Alarm)": "C:/Windows/Media/Alarm01.wav",
+                "🔔 晨光风铃 (Morning Chimes)": "C:/Windows/Media/chimes.wav",
+                "🔔 静谧和弦 (Serene Chord)": "C:/Windows/Media/chord.wav",
+                "🔔 温馨叮咚 (Warm Ding)": "C:/Windows/Media/ding.wav",
+                "🔔 凯旋之声 (Tada Fanfare)": "C:/Windows/Media/tada.wav",
+                "🔔 电子警报 (Digital Alarm)": "C:/Windows/Media/Alarm03.wav",
+                "🔔 系统默认 (System Default)": "C:/Windows/Media/Windows Default.wav"
+            },
+            "en": {
+                "🔔 Classic Alarm": "C:/Windows/Media/Alarm01.wav",
+                "🔔 Morning Chimes": "C:/Windows/Media/chimes.wav",
+                "🔔 Serene Chord": "C:/Windows/Media/chord.wav",
+                "🔔 Warm Ding": "C:/Windows/Media/ding.wav",
+                "🔔 Tada Fanfare": "C:/Windows/Media/tada.wav",
+                "🔔 Digital Alarm": "C:/Windows/Media/Alarm03.wav",
+                "🔔 System Default": "C:/Windows/Media/Windows Default.wav"
+            }
+        }
         
         # Initialize
         self.app_id = "NativeLoopTimer"
@@ -285,6 +505,7 @@ class TimerApp:
                 # Normalize types to prevent JSON schema compatibility issues
                 for task in tasks:
                     task["is_paused"] = bool(task.get("is_paused", False))
+                    task["sound_path"] = str(task.get("sound_path", "C:/Windows/Media/Windows Default.wav"))
                     if task["type"] == "timer":
                         task["duration_minutes"] = float(task.get("duration_minutes", 20.0))
                         task["is_auto_loop"] = bool(task.get("is_auto_loop", True))
@@ -332,6 +553,7 @@ class TimerApp:
                         <image placement="appLogoOverride" hint-crop="circle" src="file:///{self.png_path.replace(chr(92), '/')}"/>
                     </binding>
                 </visual>
+                <audio silent="true"/>
             </toast>
             """
             xml_doc = win_xml.XmlDocument()
@@ -341,6 +563,17 @@ class TimerApp:
             toast = win_notify.ToastNotification(xml_doc)
             notifier.show(toast)
             print(f"[TimerApp] Toast delivered: '{title}' - '{message}'")
+            
+            # Asynchronously play the sound associated with the first missed task
+            first_task = missed_tasks[0]
+            sound_filepath = first_task.get("sound_path", "C:/Windows/Media/Windows Default.wav")
+            try:
+                if os.path.exists(sound_filepath):
+                    winsound.PlaySound(sound_filepath, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                else:
+                    winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
+            except Exception as se:
+                print(f"[TimerApp] Audio stream warning: {se}")
         except Exception as e:
             print(f"[TimerApp] Error sending notification: {e}")
 
@@ -668,6 +901,21 @@ class TimerApp:
             self.repeat_vars.append((i + 1, var))
             self.repeat_checkboxes.append(cb)
             
+        # Common Input: Sound Picker
+        self.sound_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["sound_label"], font=label_font, text_color="#E5E7EB")
+        self.sound_label.pack(anchor="w", padx=20, pady=(5, 2))
+        
+        self.sound_combobox = ctk.CTkComboBox(
+            form_frame,
+            values=list(self.sound_options[lang].keys()),
+            command=self.on_sound_selected,
+            font=info_font,
+            height=32,
+            state="readonly"
+        )
+        self.sound_combobox.pack(fill="x", padx=20, pady=(0, 10))
+        self.sound_combobox.set("🔔 经典闹铃 (Classic Alarm)" if lang == "zh" else "🔔 Classic Alarm")
+
         # Common Input: Message Text
         self.msg_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["msg_label"], font=label_font, text_color="#E5E7EB")
         self.msg_label.pack(anchor="w", padx=20, pady=(5, 2))
@@ -758,6 +1006,24 @@ class TimerApp:
         self.lang_btn.place(relx=1.0, rely=0.0, anchor="ne", x=-20, y=20)
         self.lang_btn.lift()
         
+        # Floating PiP Toggle Button in top-right
+        self.pip_btn = ctk.CTkButton(
+            self.root,
+            text="📌",
+            width=36,
+            height=26,
+            fg_color="#1F2937",
+            hover_color="#374151",
+            text_color="#60A5FA",
+            border_width=1,
+            border_color="#4B5563",
+            corner_radius=13,
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            command=self.toggle_pip_mode
+        )
+        self.pip_btn.place(relx=1.0, rely=0.0, anchor="ne", x=-80, y=20)
+        self.pip_btn.lift()
+        
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
         
         # Initial Render & Loop Waking
@@ -768,6 +1034,28 @@ class TimerApp:
         """Toggles active application language and updates all UI elements dynamically."""
         self.current_lang = "en" if self.current_lang == "zh" else "zh"
         self.save_config()
+
+    def toggle_pip_mode(self):
+        """Toggles picture-in-picture float mode."""
+        if self.pip_window and self.pip_window.winfo_exists():
+            self.pip_window.close_pip()
+        else:
+            self.hide_window()
+            self.pip_window = PiPWindow(self)
+
+    def on_sound_selected(self, val):
+        """Plays the selected sound as a quick preview."""
+        lang = self.current_lang
+        sound_filepath = self.sound_options[lang].get(val, "C:/Windows/Media/Windows Default.wav")
+        try:
+            # Stop any running preview first
+            winsound.PlaySound(None, winsound.SND_PURGE)
+            if os.path.exists(sound_filepath):
+                winsound.PlaySound(sound_filepath, winsound.SND_FILENAME | winsound.SND_ASYNC)
+            else:
+                winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
+        except Exception as e:
+            print(f"[TimerApp] Sound preview warning: {e}")
         
         # Update float toggle button text
         self.lang_btn.configure(text="EN" if self.current_lang == "zh" else "中")
@@ -813,7 +1101,19 @@ class TimerApp:
         for idx, cb in enumerate(self.repeat_checkboxes):
             cb.configure(text=weekdays[idx], width=42 if lang == "en" else 40)
             
-        # 6. Message fields
+        # 6. Message fields & Sound selector translation mapping
+        self.sound_label.configure(text=self.loc[lang]["sound_label"])
+        prev_selection = self.sound_combobox.get()
+        old_lang = "en" if lang == "zh" else "zh"
+        found_file = self.sound_options[old_lang].get(prev_selection, "C:/Windows/Media/Windows Default.wav")
+        new_selection = "🔔 系统默认 (System Default)" if lang == "zh" else "🔔 System Default"
+        for k, v in self.sound_options[lang].items():
+            if v == found_file:
+                new_selection = k
+                break
+        self.sound_combobox.configure(values=list(self.sound_options[lang].keys()))
+        self.sound_combobox.set(new_selection)
+
         self.msg_label.configure(text=self.loc[lang]["msg_label"])
         
         # Swap default content if unchanged
@@ -984,6 +1284,8 @@ class TimerApp:
                 return
                 
             is_loop = self.timer_loop_var.get()
+            selected_sound_name = self.sound_combobox.get()
+            sound_path = self.sound_options[lang].get(selected_sound_name, "C:/Windows/Media/Windows Default.wav")
             new_task = {
                 "id": str(uuid.uuid4()),
                 "type": "timer",
@@ -993,7 +1295,8 @@ class TimerApp:
                 "is_paused": False,
                 "created_at": time.time(),
                 "target_time": time.time() + (minutes * 60.0),
-                "remaining_seconds": minutes * 60.0
+                "remaining_seconds": minutes * 60.0,
+                "sound_path": sound_path
             }
         else: # ⏰ 闹钟
             h_raw = self.alarm_hour_entry.get().strip()
@@ -1009,6 +1312,8 @@ class TimerApp:
                     repeat_days.append(day_num)
                     
             target_epoch = calculate_next_alarm(alarm_time, repeat_days)
+            selected_sound_name = self.sound_combobox.get()
+            sound_path = self.sound_options[lang].get(selected_sound_name, "C:/Windows/Media/Windows Default.wav")
             new_task = {
                 "id": str(uuid.uuid4()),
                 "type": "alarm",
@@ -1017,7 +1322,8 @@ class TimerApp:
                 "repeat_days": repeat_days,
                 "is_paused": False,
                 "is_completed_today": False,
-                "target_time": target_epoch
+                "target_time": target_epoch,
+                "sound_path": sound_path
             }
             
         with self.lock:
@@ -1039,6 +1345,7 @@ class TimerApp:
         self.everyday_var.set(False)
         for _, var in self.repeat_vars:
             var.set(False)
+        self.sound_combobox.set("🔔 经典闹铃 (Classic Alarm)" if lang == "zh" else "🔔 Classic Alarm")
         self.msg_entry.delete(0, 'end')
         self.msg_entry.insert(0, self.loc[lang]["msg_default"])
         
@@ -1074,8 +1381,8 @@ class TimerApp:
         for task in tasks_copy:
             task_id = task["id"]
             
-            # Card frame container
-            card = ctk.CTkFrame(self.task_list_frame, fg_color="#1F2937", corner_radius=8, height=45)
+            # Card frame container (height is dynamic to fit the grid items elegantly)
+            card = ctk.CTkFrame(self.task_list_frame, fg_color="#1F2937", corner_radius=8)
             card.pack(fill="x", padx=5, pady=4)
             
             card.grid_columnconfigure(0, weight=0) # Badge
@@ -1157,6 +1464,18 @@ class TimerApp:
             )
             delete_btn.grid(row=0, column=5, padx=(4, 12), pady=8)
             
+            # Dynamic Card Progress Bar spanning all 6 columns in row 1
+            progress_bar = ctk.CTkProgressBar(
+                card,
+                height=3,
+                corner_radius=0,
+                fg_color="#374151",
+                progress_color="#10B981"
+            )
+            progress_bar.grid(row=1, column=0, columnspan=6, sticky="ew", padx=12, pady=(0, 6))
+            progress_bar.set(1.0)
+            self.task_progress_bars[task_id] = progress_bar
+            
         # Request immediate visual redraw of ticking components
         self.tick_gui_status()
         
@@ -1179,14 +1498,24 @@ class TimerApp:
                 continue
                 
             label = self.task_labels[task_id]
+            pbar = self.task_progress_bars.get(task_id)
+            
             if task["is_paused"]:
                 if task["type"] == "timer":
                     rem = task["remaining_seconds"]
                     rem_min = int(rem // 60)
                     rem_sec = int(rem % 60)
                     label.configure(text=self.loc[lang]["status_paused_rem"].format(min=rem_min, sec=rem_sec), text_color="#F59E0B")
+                    if pbar:
+                        total = task["duration_minutes"] * 60.0
+                        ratio = max(0.0, min(1.0, rem / total)) if total > 0.0 else 0.0
+                        pbar.set(ratio)
+                        pbar.configure(progress_color="#F59E0B")
                 else:
                     label.configure(text=self.loc[lang]["status_paused"], text_color="#F59E0B")
+                    if pbar:
+                        pbar.set(1.0)
+                        pbar.configure(progress_color="#F59E0B")
             else:
                 if task["type"] == "timer":
                     remaining = task["target_time"] - curr
@@ -1195,6 +1524,18 @@ class TimerApp:
                     rem_min = int(remaining // 60)
                     rem_sec = int(remaining % 60)
                     label.configure(text=self.loc[lang]["status_rem"].format(min=rem_min, sec=rem_sec), text_color="#10B981")
+                    if pbar:
+                        total = task["duration_minutes"] * 60.0
+                        ratio = max(0.0, min(1.0, remaining / total)) if total > 0.0 else 0.0
+                        pbar.set(ratio)
+                        
+                        # Color shifts depending on time left
+                        if remaining < 60.0 or ratio < 0.2:
+                            pbar.configure(progress_color="#EF4444") # Red
+                        elif ratio < 0.6:
+                            pbar.configure(progress_color="#F59E0B") # Yellow
+                        else:
+                            pbar.configure(progress_color="#10B981") # Green
                 else:
                     repeat_str = ""
                     if task["repeat_days"]:
@@ -1210,6 +1551,9 @@ class TimerApp:
                     else:
                         repeat_str = self.loc[lang]["repeat_oneoff"]
                     label.configure(text=self.loc[lang]["status_target"].format(time=task['alarm_time'], repeat=repeat_str), text_color="#10B981")
+                    if pbar:
+                        pbar.set(1.0)
+                        pbar.configure(progress_color="#10B981")
 
     def update_gui_status(self):
         """Thread-safe UI polling loop (ticks once per second if window is viewable)."""
