@@ -163,6 +163,12 @@ def test_intelligent_time_parsing():
     assert app.validate_alarm_time("abc") is None
     assert app.validate_alarm_time("2560") is None
     
+    assert app.validate_alarm_time("8", "30", "AM") == "08:30"
+    assert app.validate_alarm_time("8", "30", "PM") == "20:30"
+    assert app.validate_alarm_time("12", "00", "AM") == "00:00"
+    assert app.validate_alarm_time("12", "00", "PM") == "12:00"
+    assert app.validate_alarm_time("13", "00", "AM") is None
+    
     app.exit_app()
     print("✅ Intelligent time parsing unit tests PASSED!")
 

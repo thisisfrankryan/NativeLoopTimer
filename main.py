@@ -952,6 +952,16 @@ class TimerApp:
             time_lbl = ctk.CTkLabel(alarm_frame, text=self.loc[lang]["alarm_time"], font=label_font, text_color="#E5E7EB")
             time_lbl.pack(anchor="w", pady=(0, 2))
             
+            dialog_format_var = ctk.StringVar(value="24H")
+            dialog_format_btn = ctk.CTkSegmentedButton(
+                alarm_frame,
+                values=["24H", "AM", "PM"],
+                variable=dialog_format_var,
+                font=info_font,
+                height=28
+            )
+            dialog_format_btn.pack(fill="x", pady=(2, 6))
+            
             time_entry_row = ctk.CTkFrame(alarm_frame, fg_color="transparent")
             time_entry_row.pack(fill="x", pady=(0, 8))
             
@@ -996,10 +1006,14 @@ class TimerApp:
                     h_entry.insert(0, val.replace(" ", ""))
                     m_entry.focus_set()
                     return
-                if len(val.strip()) >= 2 and val.strip().isdigit():
-                    m_entry.focus_set()
-                    m_entry.select_range(0, 'end')
-                    m_entry.icursor('end')
+                val_strip = val.strip()
+                if val_strip.isdigit():
+                    # Intelligently auto-jump focus if digit cannot be followed by another to form a valid hour (>= 3)
+                    # or if the entered length is already 2.
+                    if (len(val_strip) == 1 and 3 <= int(val_strip) <= 9) or len(val_strip) >= 2:
+                        m_entry.focus_set()
+                        m_entry.select_range(0, 'end')
+                        m_entry.icursor('end')
             
             def on_dialog_hour_keypress(event):
                 if event.keysym == "Right":
@@ -1159,7 +1173,7 @@ class TimerApp:
             else: # alarm
                 h_val = h_entry.get().strip()
                 m_val = m_entry.get().strip()
-                alarm_time = self.validate_alarm_time(h_val, m_val)
+                alarm_time = self.validate_alarm_time(h_val, m_val, dialog_format_var.get())
                 if alarm_time is None:
                     dialog_error_lbl.configure(text=self.loc[lang]["error_alarm_invalid"], text_color="#EF4444")
                     return
@@ -1424,6 +1438,16 @@ class TimerApp:
         
         self.alarm_time_label = ctk.CTkLabel(self.alarm_fields_frame, text=self.loc[lang]["alarm_time"], font=label_font, text_color="#E5E7EB")
         self.alarm_time_label.pack(anchor="w", pady=(5, 2))
+        
+        self.time_format_var = ctk.StringVar(value="24H")
+        self.time_format_btn = ctk.CTkSegmentedButton(
+            self.alarm_fields_frame,
+            values=["24H", "AM", "PM"],
+            variable=self.time_format_var,
+            font=info_font,
+            height=28
+        )
+        self.time_format_btn.pack(fill="x", pady=(2, 6))
         
         entry_row = ctk.CTkFrame(self.alarm_fields_frame, fg_color="transparent")
         entry_row.pack(fill="x", pady=(0, 5))
@@ -1736,7 +1760,7 @@ class TimerApp:
         all_checked = all(var.get() for _, var in self.repeat_vars)
         self.everyday_var.set(all_checked)
 
-    def validate_alarm_time(self, h_str, m_str=""):
+    def validate_alarm_time(self, h_str, m_str="", mode="24H"):
         h_str = h_str.strip()
         m_str = m_str.strip()
         
@@ -1775,9 +1799,25 @@ class TimerApp:
             else:
                 return None
                 
-        if 0 <= h <= 23 and 0 <= m <= 59:
-            return f"{h:02d}:{m:02d}"
-        return None
+        # Validate minutes range
+        if not (0 <= m <= 59):
+            return None
+            
+        # Convert hour based on 12-hour/24-hour mode
+        if mode == "AM":
+            if not (1 <= h <= 12):
+                return None
+            h_24 = 0 if h == 12 else h
+        elif mode == "PM":
+            if not (1 <= h <= 12):
+                return None
+            h_24 = 12 if h == 12 else h + 12
+        else: # "24H"
+            if not (0 <= h <= 23):
+                return None
+            h_24 = h
+            
+        return f"{h_24:02d}:{m:02d}"
 
     def on_hour_keyrelease(self, event):
         val = self.alarm_hour_entry.get()
@@ -1787,10 +1827,14 @@ class TimerApp:
             self.alarm_minute_entry.focus_set()
             return
             
-        if len(val.strip()) >= 2 and val.strip().isdigit():
-            self.alarm_minute_entry.focus_set()
-            self.alarm_minute_entry.select_range(0, 'end')
-            self.alarm_minute_entry.icursor('end')
+        val_strip = val.strip()
+        if val_strip.isdigit():
+            # Intelligently auto-jump focus if digit cannot be followed by another to form a valid hour (>= 3)
+            # or if the entered length is already 2.
+            if (len(val_strip) == 1 and 3 <= int(val_strip) <= 9) or len(val_strip) >= 2:
+                self.alarm_minute_entry.focus_set()
+                self.alarm_minute_entry.select_range(0, 'end')
+                self.alarm_minute_entry.icursor('end')
 
     def on_hour_keypress(self, event):
         if event.keysym == "Right":
@@ -1903,7 +1947,7 @@ class TimerApp:
         else: # ⏰ 闹钟
             h_raw = self.alarm_hour_entry.get().strip()
             m_raw = self.alarm_minute_entry.get().strip()
-            alarm_time = self.validate_alarm_time(h_raw, m_raw)
+            alarm_time = self.validate_alarm_time(h_raw, m_raw, self.time_format_var.get())
             if alarm_time is None:
                 self.error_label.configure(text=self.loc[lang]["error_alarm_invalid"], text_color="#EF4444")
                 return
