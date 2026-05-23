@@ -492,7 +492,9 @@ class TimerApp:
                 "edit_task_title": "编辑任务设置",
                 "edit_task_header": "✏️ 修改任务配置",
                 "dialog_cancel": "取消",
-                "dialog_save": "保存"
+                "dialog_save": "保存",
+                "set_timer_display": "设定: {dur}分钟",
+                "set_alarm_display": "设定: {time}"
             },
             "en": {
                 "title": "⏰ Multi-Task Native Timer Center",
@@ -544,7 +546,9 @@ class TimerApp:
                 "edit_task_title": "Edit Task Settings",
                 "edit_task_header": "✏️ Edit Task Configuration",
                 "dialog_cancel": "Cancel",
-                "dialog_save": "Save"
+                "dialog_save": "Save",
+                "set_timer_display": "Set: {dur} min",
+                "set_alarm_display": "Set: {time}"
             }
         }
         self.current_lang = "zh"
@@ -2013,9 +2017,13 @@ class TimerApp:
             )
             type_label.grid(row=0, column=1, padx=(2, 8), pady=(12, 4), sticky="w")
             
+            # Right Column Container (to stack buttons and set-time label vertically)
+            right_col_frame = ctk.CTkFrame(card, fg_color="transparent")
+            right_col_frame.grid(row=0, column=2, padx=(4, 12), pady=(12, 4), sticky="ne")
+
             # Control Buttons Frame on the right side of the header
-            btn_frame = ctk.CTkFrame(card, fg_color="transparent")
-            btn_frame.grid(row=0, column=2, padx=(4, 12), pady=(12, 4), sticky="e")
+            btn_frame = ctk.CTkFrame(right_col_frame, fg_color="transparent")
+            btn_frame.pack(side="top", anchor="e")
             
             # Play/Pause Icon trigger
             btn_text = "⏸" if not task["is_paused"] else "▶"
@@ -2070,6 +2078,22 @@ class TimerApp:
                 command=lambda tid=task_id: self.delete_task(tid)
             )
             delete_btn.pack(side="left", padx=2)
+
+            # Set time label below control buttons (displays setting: e.g. "设定: 40分钟" or "Set: 40 min")
+            if task["type"] == "timer":
+                dur = task["duration_minutes"]
+                dur_str = f"{int(dur)}" if dur.is_integer() else f"{dur}"
+                set_time_text = self.loc[lang]["set_timer_display"].format(dur=dur_str)
+            else:
+                set_time_text = self.loc[lang]["set_alarm_display"].format(time=task["alarm_time"])
+                
+            set_time_lbl = ctk.CTkLabel(
+                right_col_frame,
+                text=set_time_text,
+                font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+                text_color="#9CA3AF"
+            )
+            set_time_lbl.pack(side="top", anchor="e", pady=(2, 0))
             
             # Massive visual sand hourglass / alarm clock in its own row centered
             canvas_frame = ctk.CTkFrame(card, fg_color="transparent")
