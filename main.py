@@ -215,6 +215,52 @@ class CTkAlarmClock(tk.Canvas):
         self.create_oval(cx - pin_r, cy - pin_r, cx + pin_r, cy + pin_r, fill=self.clock_color, outline="")
 
 
+class CTkToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+        self.widget.bind("<Enter>", self.show_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+        
+    def show_tooltip(self, event=None):
+        if self.tooltip_window:
+            return
+            
+        t = self.text() if callable(self.text) else self.text
+        if not t:
+            return
+        
+        # Get widget screen coordinates
+        x = self.widget.winfo_rootx() + (self.widget.winfo_width() // 2) - 40
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        
+        self.tooltip_window = tk.Toplevel(self.widget)
+        self.tooltip_window.wm_overrideredirect(True) # Remove window borders
+        self.tooltip_window.wm_geometry(f"+{x}+{y}")
+        self.tooltip_window.attributes("-topmost", True)
+        self.tooltip_window.configure(bg="#1E293B") # Dark slate
+        
+        label = tk.Label(
+            self.tooltip_window,
+            text=t,
+            justify="left",
+            background="#1E293B",
+            foreground="#F3F4F6",
+            font=("Segoe UI", 9, "bold"),
+            padx=6,
+            pady=3,
+            highlightthickness=1,
+            highlightbackground="#4B5563" # Sleek border
+        )
+        label.pack()
+        
+    def hide_tooltip(self, event=None):
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
+
+
 class CTkFolderIcon(tk.Canvas):
     def __init__(self, parent, size=32, bg_color="#1E293B", folder_color="#D1FAE5"):
         super().__init__(parent, width=size, height=size, bg=bg_color, highlightthickness=0)
@@ -542,7 +588,16 @@ class TimerApp:
                 "folder_tasks_count": "{count} 个任务",
                 "rename_group_title": "重命名分组",
                 "rename_group_header": "✏️ 输入新的分组名称",
-                "rename_group_label": "分组名称:"
+                "rename_group_label": "分组名称:",
+                "tip_play": "播放/恢复",
+                "tip_pause": "暂停",
+                "tip_reset": "重置",
+                "tip_edit": "编辑任务",
+                "tip_delete": "删除任务",
+                "tip_rename": "重命名分组",
+                "tip_back": "返回",
+                "tip_lang": "切换语言 (Toggle Language)",
+                "tip_pip": "画中画模式 (PiP Mode)"
             },
             "en": {
                 "title": "⏰ Multi-Task Native Timer Center",
@@ -607,7 +662,16 @@ class TimerApp:
                 "folder_tasks_count": "{count} tasks",
                 "rename_group_title": "Rename Group",
                 "rename_group_header": "✏️ Enter New Group Name",
-                "rename_group_label": "Group Name:"
+                "rename_group_label": "Group Name:",
+                "tip_play": "Play/Resume",
+                "tip_pause": "Pause",
+                "tip_reset": "Reset",
+                "tip_edit": "Edit Task",
+                "tip_delete": "Delete Task",
+                "tip_rename": "Rename Group",
+                "tip_back": "Back",
+                "tip_lang": "Toggle Language",
+                "tip_pip": "PiP Mode"
             }
         }
         self.current_lang = "zh"
@@ -1688,6 +1752,7 @@ class TimerApp:
         )
         self.lang_btn.place(relx=1.0, rely=0.0, anchor="ne", x=-20, y=20)
         self.lang_btn.lift()
+        CTkToolTip(self.lang_btn, lambda: self.loc[self.current_lang]["tip_lang"])
         
         # Floating PiP Toggle Button in top-right
         self.pip_btn = ctk.CTkButton(
@@ -1706,6 +1771,7 @@ class TimerApp:
         )
         self.pip_btn.place(relx=1.0, rely=0.0, anchor="ne", x=-80, y=20)
         self.pip_btn.lift()
+        CTkToolTip(self.pip_btn, lambda: self.loc[self.current_lang]["tip_pip"])
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
         
         # Initial Render & Loop Waking
@@ -2425,6 +2491,7 @@ class TimerApp:
                     command=lambda old_g=gname: self.rename_group(old_g)
                 )
                 edit_btn.grid(row=0, column=2, padx=15, pady=15, sticky="e")
+                CTkToolTip(edit_btn, self.loc[lang]["tip_rename"])
                 
                 # Place card in grid
                 r = idx // cols
@@ -2472,6 +2539,7 @@ class TimerApp:
             command=self.go_back_to_root
         )
         back_btn.pack(side="left", padx=(10, 8), pady=8)
+        CTkToolTip(back_btn, self.loc[lang]["tip_back"])
         
         path_text = f".  /  {self.current_folder}"
         path_lbl = ctk.CTkLabel(
@@ -2494,6 +2562,7 @@ class TimerApp:
             command=lambda old_g=self.current_folder: self.rename_group(old_g)
         )
         rename_btn.pack(side="left", padx=8)
+        CTkToolTip(rename_btn, self.loc[lang]["tip_rename"])
         
         # 3. Filter tasks copy to folder
         tasks_copy = [t for t in tasks_copy if t.get("group") == self.current_folder]
@@ -2574,19 +2643,22 @@ class TimerApp:
                 command=lambda tid=task_id: self.toggle_task(tid)
             )
             pause_btn.pack(side="left", padx=2)
+            CTkToolTip(pause_btn, lambda tid=task_id: self.loc[self.current_lang]["tip_pause"] if not next((t for t in self.tasks if t["id"] == tid), task)["is_paused"] else self.loc[self.current_lang]["tip_play"])
             
-            # Reset Icon trigger
-            reset_btn = ctk.CTkButton(
-                btn_frame,
-                text="🔄",
-                width=28,
-                height=28,
-                fg_color="#374151",
-                hover_color="#4B5563",
-                corner_radius=6,
-                command=lambda tid=task_id: self.reset_task(tid)
-            )
-            reset_btn.pack(side="left", padx=2)
+            # Reset Icon trigger (Only visible for Timers)
+            if task["type"] == "timer":
+                reset_btn = ctk.CTkButton(
+                    btn_frame,
+                    text="🔄",
+                    width=28,
+                    height=28,
+                    fg_color="#374151",
+                    hover_color="#4B5563",
+                    corner_radius=6,
+                    command=lambda tid=task_id: self.reset_task(tid)
+                )
+                reset_btn.pack(side="left", padx=2)
+                CTkToolTip(reset_btn, self.loc[lang]["tip_reset"])
             
             # Edit Icon trigger
             edit_btn = ctk.CTkButton(
@@ -2600,6 +2672,7 @@ class TimerApp:
                 command=lambda tid=task_id: self.edit_task(tid)
             )
             edit_btn.pack(side="left", padx=2)
+            CTkToolTip(edit_btn, self.loc[lang]["tip_edit"])
             
             # Trash Icon trigger
             delete_btn = ctk.CTkButton(
@@ -2613,6 +2686,7 @@ class TimerApp:
                 command=lambda tid=task_id: self.delete_task(tid)
             )
             delete_btn.pack(side="left", padx=2)
+            CTkToolTip(delete_btn, self.loc[lang]["tip_delete"])
 
             # Set time label below control buttons (displays setting: e.g. "设定: 40分钟" or "Set: 40 min")
             if task["type"] == "timer":
