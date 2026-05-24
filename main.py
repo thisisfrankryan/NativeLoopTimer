@@ -494,7 +494,12 @@ class TimerApp:
                 "dialog_cancel": "取消",
                 "dialog_save": "保存",
                 "set_timer_display": "设定: {dur}分钟",
-                "set_alarm_display": "设定: {time}"
+                "set_alarm_display": "设定: {time}",
+                "group_label": "选择或输入分组 (Group Name):",
+                "group_combobox_placeholder": "输入或选择分组名称",
+                "group_default": "默认",
+                "filter_all": "全部显示 (Show All)",
+                "group_filter_label": "分组过滤:"
             },
             "en": {
                 "title": "⏰ Multi-Task Native Timer Center",
@@ -548,7 +553,12 @@ class TimerApp:
                 "dialog_cancel": "Cancel",
                 "dialog_save": "Save",
                 "set_timer_display": "Set: {dur} min",
-                "set_alarm_display": "Set: {time}"
+                "set_alarm_display": "Set: {time}",
+                "group_label": "Select or Enter Group Name:",
+                "group_combobox_placeholder": "Enter or select group",
+                "group_default": "Default",
+                "filter_all": "Show All",
+                "group_filter_label": "Group Filter:"
             }
         }
         self.current_lang = "zh"
@@ -652,6 +662,7 @@ class TimerApp:
                 for task in tasks:
                     task["is_paused"] = bool(task.get("is_paused", False))
                     task["sound_path"] = str(task.get("sound_path", "C:/Windows/Media/Windows Default.wav"))
+                    task["group"] = str(task.get("group", self.loc[self.current_lang]["group_default"]))
                     if task["type"] == "timer":
                         task["duration_minutes"] = float(task.get("duration_minutes", 20.0))
                         task["is_auto_loop"] = bool(task.get("is_auto_loop", True))
@@ -816,6 +827,7 @@ class TimerApp:
         with self.lock:
             self.tasks = [t for t in self.tasks if t["id"] != task_id]
         self.save_config()
+        self.update_group_combobox_values()
         self.render_task_list()
 
     def reset_task(self, task_id):
@@ -849,7 +861,7 @@ class TimerApp:
         
         dialog = ctk.CTkToplevel(self.root)
         dialog.title(self.loc[lang]["edit_task_title"])
-        dialog.geometry("450x560")
+        dialog.geometry("450x620")
         dialog.resizable(False, False)
         dialog.transient(self.root)
         dialog.configure(fg_color="#111827")
@@ -861,7 +873,7 @@ class TimerApp:
         ry = self.root.winfo_y()
         rw = self.root.winfo_width()
         rh = self.root.winfo_height()
-        dw, dh = 450, 560
+        dw, dh = 450, 620
         x = rx + (rw - dw) // 2
         y = ry + (rh - dh) // 2
         dialog.geometry(f"{dw}x{dh}+{x}+{y}")
@@ -1088,6 +1100,19 @@ class TimerApp:
             if current_repeat_days and len(current_repeat_days) == 7:
                 everyday_v.set(True)
                 
+        # 2.5 Group Selector
+        group_lbl = ctk.CTkLabel(form_frame, text=self.loc[lang]["group_label"], font=label_font, text_color="#E5E7EB")
+        group_lbl.pack(anchor="w", padx=20, pady=(8, 2))
+        
+        group_combo = ctk.CTkComboBox(
+            form_frame,
+            values=self.get_all_group_names(),
+            font=info_font,
+            height=32
+        )
+        group_combo.pack(fill="x", padx=20, pady=(0, 8))
+        group_combo.set(target_task.get("group", self.loc[lang]["group_default"]))
+
         # 3. Sound Selector
         sound_lbl = ctk.CTkLabel(form_frame, text=self.loc[lang]["sound_label"], font=label_font, text_color="#E5E7EB")
         sound_lbl.pack(anchor="w", padx=20, pady=(8, 2))
@@ -1149,6 +1174,10 @@ class TimerApp:
                 dialog_error_lbl.configure(text=self.loc[lang]["error_msg_empty"], text_color="#EF4444")
                 return
                 
+            grp_val = group_combo.get().strip()
+            if not grp_val:
+                grp_val = self.loc[lang]["group_default"]
+
             selected_s = sound_combo.get()
             s_path = self.sound_options[lang].get(selected_s, "C:/Windows/Media/Windows Default.wav")
             
@@ -1162,6 +1191,7 @@ class TimerApp:
                 with self.lock:
                     target_task["name"] = name_val
                     target_task["sound_path"] = s_path
+                    target_task["group"] = grp_val
                     target_task["is_auto_loop"] = loop_var.get()
                     
                     if abs(target_task["duration_minutes"] - minutes) > 1e-5:
@@ -1186,6 +1216,7 @@ class TimerApp:
                 with self.lock:
                     target_task["name"] = name_val
                     target_task["sound_path"] = s_path
+                    target_task["group"] = grp_val
                     
                     if target_task["alarm_time"] != alarm_time or target_task["repeat_days"] != rep_days:
                         target_task["alarm_time"] = alarm_time
@@ -1194,6 +1225,7 @@ class TimerApp:
                             target_task["target_time"] = calculate_next_alarm(alarm_time, rep_days)
                             
             self.save_config()
+            self.update_group_combobox_values()
             self.render_task_list()
             dialog.destroy()
             
@@ -1319,6 +1351,27 @@ class TimerApp:
             text_color="#E5E7EB"
         )
         self.list_title_label.pack(side="left", anchor="w")
+
+        # Group Filter dropdown
+        self.filter_label = ctk.CTkLabel(
+            controls_frame,
+            text=self.loc[lang]["group_filter_label"],
+            font=info_font,
+            text_color="#9CA3AF"
+        )
+        self.filter_label.pack(side="left", padx=(20, 5))
+
+        self.filter_combobox = ctk.CTkComboBox(
+            controls_frame,
+            values=[self.loc[lang]["filter_all"]],
+            font=info_font,
+            height=26,
+            width=140,
+            state="readonly",
+            command=self.on_filter_changed
+        )
+        self.filter_combobox.pack(side="left", padx=5)
+        self.filter_combobox.set(self.loc[lang]["filter_all"])
         
         # Pause All and Resume All buttons on the right side of the list title
         self.global_resume_btn = ctk.CTkButton(
@@ -1540,6 +1593,19 @@ class TimerApp:
             self.repeat_vars.append((i + 1, var))
             self.repeat_checkboxes.append(cb)
             
+        # Common Input: Group Picker
+        self.group_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["group_label"], font=label_font, text_color="#E5E7EB")
+        self.group_label.pack(anchor="w", padx=20, pady=(5, 2))
+        
+        self.group_combobox = ctk.CTkComboBox(
+            form_frame,
+            values=[self.loc[lang]["group_default"]],
+            font=info_font,
+            height=32
+        )
+        self.group_combobox.pack(fill="x", padx=20, pady=(0, 10))
+        self.group_combobox.set(self.loc[lang]["group_default"])
+
         # Common Input: Sound Picker
         self.sound_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["sound_label"], font=label_font, text_color="#E5E7EB")
         self.sound_label.pack(anchor="w", padx=20, pady=(5, 2))
@@ -1613,6 +1679,7 @@ class TimerApp:
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
         
         # Initial Render & Loop Waking
+        self.update_group_combobox_values()
         self.render_task_list()
         self.update_gui_status()
 
@@ -1697,6 +1764,33 @@ class TimerApp:
         self.sound_combobox.set(new_selection)
 
         self.msg_label.configure(text=self.loc[lang]["msg_label"])
+
+        # 6.5 Group & Filter translation synchronization
+        self.group_label.configure(text=self.loc[lang]["group_label"])
+        self.filter_label.configure(text=self.loc[lang]["group_filter_label"])
+        
+        old_lang = "en" if lang == "zh" else "zh"
+        old_default = self.loc[old_lang]["group_default"]
+        new_default = self.loc[lang]["group_default"]
+        old_all = self.loc[old_lang]["filter_all"]
+        new_all = self.loc[lang]["filter_all"]
+
+        with self.lock:
+            for t in self.tasks:
+                if t.get("group") == old_default:
+                    t["group"] = new_default
+
+        current_creation_val = self.group_combobox.get()
+        if current_creation_val == old_default:
+            self.group_combobox.set(new_default)
+
+        current_filter_val = self.filter_combobox.get()
+        if current_filter_val == old_all:
+            self.filter_combobox.set(new_all)
+        elif current_filter_val == old_default:
+            self.filter_combobox.set(new_default)
+
+        self.update_group_combobox_values()
         
         # Swap default content if unchanged
         current_msg = self.msg_entry.get("1.0", "end-1c").strip()
@@ -1819,6 +1913,47 @@ class TimerApp:
             
         return f"{h_24:02d}:{m:02d}"
 
+    def get_all_group_names(self):
+        lang = self.current_lang
+        default_grp = self.loc[lang]["group_default"]
+        groups = set()
+        for t in self.tasks:
+            grp = t.get("group")
+            if grp:
+                groups.add(grp)
+        # Remove default if present to sort it at start
+        groups.discard(default_grp)
+        # Also remove other language's default just in case
+        other_lang = "en" if lang == "zh" else "zh"
+        groups.discard(self.loc[other_lang]["group_default"])
+        return [default_grp] + sorted(list(groups))
+
+    def update_group_combobox_values(self):
+        lang = self.current_lang
+        grps = self.get_all_group_names()
+        
+        # Update task creation combo
+        if hasattr(self, "group_combobox") and self.group_combobox.winfo_exists():
+            current_val = self.group_combobox.get()
+            self.group_combobox.configure(values=grps)
+            if current_val in grps:
+                self.group_combobox.set(current_val)
+            else:
+                self.group_combobox.set(self.loc[lang]["group_default"])
+                
+        # Update filter combo
+        if hasattr(self, "filter_combobox") and self.filter_combobox.winfo_exists():
+            current_filter = self.filter_combobox.get()
+            filter_vals = [self.loc[lang]["filter_all"]] + grps
+            self.filter_combobox.configure(values=filter_vals)
+            if current_filter in filter_vals:
+                self.filter_combobox.set(current_filter)
+            else:
+                self.filter_combobox.set(self.loc[lang]["filter_all"])
+
+    def on_filter_changed(self, value):
+        self.render_task_list()
+
     def on_hour_keyrelease(self, event):
         val = self.alarm_hour_entry.get()
         if " " in val:
@@ -1919,6 +2054,10 @@ class TimerApp:
             self.error_label.configure(text=self.loc[lang]["error_msg_empty"], text_color="#EF4444")
             return
             
+        grp_str = self.group_combobox.get().strip()
+        if not grp_str:
+            grp_str = self.loc[lang]["group_default"]
+
         # Support segmented tab checks in both languages
         is_timer_tab = (current_tab == self.loc["zh"]["tab_timer"] or current_tab == self.loc["en"]["tab_timer"])
         
@@ -1942,7 +2081,8 @@ class TimerApp:
                 "created_at": time.time(),
                 "target_time": time.time() + (minutes * 60.0),
                 "remaining_seconds": minutes * 60.0,
-                "sound_path": sound_path
+                "sound_path": sound_path,
+                "group": grp_str
             }
         else: # ⏰ 闹钟
             h_raw = self.alarm_hour_entry.get().strip()
@@ -1969,13 +2109,16 @@ class TimerApp:
                 "is_paused": False,
                 "is_completed_today": False,
                 "target_time": target_epoch,
-                "sound_path": sound_path
+                "sound_path": sound_path,
+                "group": grp_str,
+                "created_at": time.time()
             }
             
         with self.lock:
             self.tasks.append(new_task)
             
         self.save_config()
+        self.update_group_combobox_values()
         
         # Display green success text
         self.error_label.configure(text=self.loc[lang]["success_add"], text_color="#10B981")
@@ -1992,6 +2135,7 @@ class TimerApp:
         for _, var in self.repeat_vars:
             var.set(False)
         self.sound_combobox.set("🔔 经典闹铃 (Classic Alarm)" if lang == "zh" else "🔔 Classic Alarm")
+        self.group_combobox.set(self.loc[lang]["group_default"])
         self.msg_entry.delete("1.0", "end")
         self.msg_entry.insert("1.0", self.loc[lang]["msg_default"])
         
@@ -2017,6 +2161,23 @@ class TimerApp:
             tasks_copy = list(self.tasks)
             
         lang = self.current_lang
+
+        # Get active filter selection
+        active_filter = self.filter_combobox.get() if hasattr(self, "filter_combobox") else self.loc[lang]["filter_all"]
+        
+        # Filter tasks
+        if active_filter != self.loc[lang]["filter_all"]:
+            tasks_copy = [t for t in tasks_copy if t.get("group") == active_filter]
+
+        # Sort tasks: default group first, then alphabetically, then by creation time
+        default_grp = self.loc[lang]["group_default"]
+        def get_sort_key(t):
+            grp = t.get("group", default_grp)
+            is_default = 0 if grp == default_grp else 1
+            return (is_default, grp.lower(), t.get("created_at", 0))
+            
+        tasks_copy = sorted(tasks_copy, key=get_sort_key)
+
         if not tasks_copy:
             empty_label = ctk.CTkLabel(
                 self.task_list_frame,
@@ -2052,9 +2213,16 @@ class TimerApp:
             
             # Type Label (directly in grid column 1)
             type_text = self.loc[lang]["tab_timer"] if task["type"] == "timer" else self.loc[lang]["tab_alarm"]
+            grp_name = task.get("group", self.loc[lang]["group_default"])
+            if len(grp_name) > 12:
+                grp_short = grp_name[:10] + "..."
+            else:
+                grp_short = grp_name
+            type_display = f"{type_text} • {grp_short}"
+            
             type_label = ctk.CTkLabel(
                 card,
-                text=type_text,
+                text=type_display,
                 font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
                 text_color="#9CA3AF",
                 anchor="w"
