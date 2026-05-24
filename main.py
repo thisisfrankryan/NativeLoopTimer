@@ -215,6 +215,42 @@ class CTkAlarmClock(tk.Canvas):
         self.create_oval(cx - pin_r, cy - pin_r, cx + pin_r, cy + pin_r, fill=self.clock_color, outline="")
 
 
+class CTkFolderIcon(tk.Canvas):
+    def __init__(self, parent, size=32, bg_color="#1E293B", folder_color="#D1FAE5"):
+        super().__init__(parent, width=size, height=size, bg=bg_color, highlightthickness=0)
+        self.size = size
+        self.folder_color = folder_color
+        self.bg_color = bg_color
+        self.draw()
+
+    def set_color(self, folder_color):
+        self.folder_color = folder_color
+        self.draw()
+
+    def draw(self):
+        self.delete("all")
+        s = self.size
+        
+        # 1. Draw Folder Tab
+        self.create_polygon(
+            [s*0.1, s*0.25,
+             s*0.45, s*0.25,
+             s*0.55, s*0.4,
+             s*0.1, s*0.4],
+            fill=self.folder_color, outline=""
+        )
+        
+        # 2. Draw Rounded Folder Body
+        r = s * 0.1
+        self.create_rectangle(s*0.1, s*0.35+r, s*0.9, s*0.85-r, fill=self.folder_color, outline="")
+        self.create_rectangle(s*0.1+r, s*0.35, s*0.9-r, s*0.85, fill=self.folder_color, outline="")
+        
+        self.create_oval(s*0.1, s*0.35, s*0.1+2*r, s*0.35+2*r, fill=self.folder_color, outline="")
+        self.create_oval(s*0.9-2*r, s*0.35, s*0.9, s*0.35+2*r, fill=self.folder_color, outline="")
+        self.create_oval(s*0.1, s*0.85-2*r, s*0.1+2*r, s*0.85, fill=self.folder_color, outline="")
+        self.create_oval(s*0.9-2*r, s*0.85-2*r, s*0.9, s*0.85, fill=self.folder_color, outline="")
+
+
 class PiPWindow(ctk.CTkToplevel):
     def __init__(self, parent_app):
         super().__init__(parent_app.root)
@@ -434,6 +470,7 @@ class TimerApp:
         self.task_hourglasses = {}
         self.task_card_widgets = {}
         self.pip_window = None
+        self.current_folder = None
         
         # Paths
         self.app_dir = os.path.dirname(os.path.abspath(sys.argv[0] if getattr(sys, 'frozen', False) else __file__))
@@ -499,7 +536,13 @@ class TimerApp:
                 "group_combobox_placeholder": "输入或选择分组名称",
                 "group_default": "默认",
                 "filter_all": "全部显示 (Show All)",
-                "group_filter_label": "分组过滤:"
+                "group_filter_label": "分组过滤:",
+                "folder_title": "文件夹",
+                "folder_back": "返回",
+                "folder_tasks_count": "{count} 个任务",
+                "rename_group_title": "重命名分组",
+                "rename_group_header": "✏️ 输入新的分组名称",
+                "rename_group_label": "分组名称:"
             },
             "en": {
                 "title": "⏰ Multi-Task Native Timer Center",
@@ -558,7 +601,13 @@ class TimerApp:
                 "group_combobox_placeholder": "Enter or select group",
                 "group_default": "Default",
                 "filter_all": "Show All",
-                "group_filter_label": "Group Filter:"
+                "group_filter_label": "Group Filter:",
+                "folder_title": "Folders",
+                "folder_back": "Back",
+                "folder_tasks_count": "{count} tasks",
+                "rename_group_title": "Rename Group",
+                "rename_group_header": "✏️ Enter New Group Name",
+                "rename_group_label": "Group Name:"
             }
         }
         self.current_lang = "zh"
@@ -1352,26 +1401,7 @@ class TimerApp:
         )
         self.list_title_label.pack(side="left", anchor="w")
 
-        # Group Filter dropdown
-        self.filter_label = ctk.CTkLabel(
-            controls_frame,
-            text=self.loc[lang]["group_filter_label"],
-            font=info_font,
-            text_color="#9CA3AF"
-        )
-        self.filter_label.pack(side="left", padx=(20, 5))
 
-        self.filter_combobox = ctk.CTkComboBox(
-            controls_frame,
-            values=[self.loc[lang]["filter_all"]],
-            font=info_font,
-            height=26,
-            width=140,
-            state="readonly",
-            command=self.on_filter_changed
-        )
-        self.filter_combobox.pack(side="left", padx=5)
-        self.filter_combobox.set(self.loc[lang]["filter_all"])
         
         # Pause All and Resume All buttons on the right side of the list title
         self.global_resume_btn = ctk.CTkButton(
@@ -1765,30 +1795,24 @@ class TimerApp:
 
         self.msg_label.configure(text=self.loc[lang]["msg_label"])
 
-        # 6.5 Group & Filter translation synchronization
+        # 6.5 Group translation synchronization
         self.group_label.configure(text=self.loc[lang]["group_label"])
-        self.filter_label.configure(text=self.loc[lang]["group_filter_label"])
         
         old_lang = "en" if lang == "zh" else "zh"
         old_default = self.loc[old_lang]["group_default"]
         new_default = self.loc[lang]["group_default"]
-        old_all = self.loc[old_lang]["filter_all"]
-        new_all = self.loc[lang]["filter_all"]
 
         with self.lock:
             for t in self.tasks:
                 if t.get("group") == old_default:
                     t["group"] = new_default
 
+        if self.current_folder == old_default:
+            self.current_folder = new_default
+
         current_creation_val = self.group_combobox.get()
         if current_creation_val == old_default:
             self.group_combobox.set(new_default)
-
-        current_filter_val = self.filter_combobox.get()
-        if current_filter_val == old_all:
-            self.filter_combobox.set(new_all)
-        elif current_filter_val == old_default:
-            self.filter_combobox.set(new_default)
 
         self.update_group_combobox_values()
         
@@ -2016,33 +2040,59 @@ class TimerApp:
             return
             
         width = self.task_list_frame._parent_canvas.winfo_width()
-        if width <= 200:
-            cols = 1
-        elif width >= 1050:
-            cols = 3
-        elif width >= 680:
-            cols = 2
-        else:
-            cols = 1
-            
-        with self.lock:
-            tasks_copy = list(self.tasks)
-            
-        for c in range(10):
-            self.task_list_frame.grid_columnconfigure(c, weight=0, minsize=0)
-            
-        for c in range(cols):
-            self.task_list_frame.grid_columnconfigure(c, weight=1, minsize=320)
-            
-        for idx, task in enumerate(tasks_copy):
-            task_id = task["id"]
-            card = self.task_card_widgets.get(task_id)
-            if card and card.winfo_exists():
-                r = idx // cols
-                c = idx % cols
-                card.pack_forget()
-                card.grid(row=r, column=c, padx=8, pady=8, sticky="nsew")
+        
+        if self.current_folder is None:
+            # Layout Folder Cards
+            cols = 2 if width >= 580 else 1
+            for c in range(10):
+                self.task_list_frame.grid_columnconfigure(c, weight=0, minsize=0)
+            for c in range(cols):
+                self.task_list_frame.grid_columnconfigure(c, weight=1, minsize=260)
                 
+            grps = self.get_all_group_names()
+            for idx, gname in enumerate(grps):
+                fcard = self.task_card_widgets.get(f"folder_{gname}")
+                if fcard and fcard.winfo_exists():
+                    r = idx // cols
+                    c = idx % cols
+                    fcard.grid_forget()
+                    fcard.grid(row=r, column=c, padx=10, pady=10, sticky="ew")
+        else:
+            # Layout Task Cards
+            if width <= 200:
+                cols = 1
+            elif width >= 1050:
+                cols = 3
+            elif width >= 680:
+                cols = 2
+            else:
+                cols = 1
+                
+            with self.lock:
+                tasks_copy = [t for t in self.tasks if t.get("group") == self.current_folder]
+            tasks_copy = sorted(tasks_copy, key=lambda t: t.get("created_at", 0))
+            
+            for c in range(10):
+                self.task_list_frame.grid_columnconfigure(c, weight=0, minsize=0)
+            for c in range(cols):
+                self.task_list_frame.grid_columnconfigure(c, weight=1, minsize=320)
+                
+            # Make sure header frame spans correct columns
+            for child in self.task_list_frame.winfo_children():
+                info = child.grid_info()
+                if info and info.get("row") == 0 and info.get("column") == 0:
+                    child.grid(columnspan=cols)
+                    break
+                    
+            for idx, task in enumerate(tasks_copy):
+                task_id = task["id"]
+                card = self.task_card_widgets.get(task_id)
+                if card and card.winfo_exists():
+                    r = (idx // cols) + 1  # Offset by 1 for the header in row 0
+                    c = idx % cols
+                    card.grid_forget()
+                    card.grid(row=r, column=c, padx=8, pady=8, sticky="nsew")
+                    
         self.adjust_scrollbar_visibility()
 
     def on_start_clicked(self):
@@ -2118,6 +2168,7 @@ class TimerApp:
             self.tasks.append(new_task)
             
         self.save_config()
+        self.current_folder = grp_str
         self.update_group_combobox_values()
         
         # Display green success text
@@ -2142,6 +2193,133 @@ class TimerApp:
         # Redraw GUI Cards
         self.render_task_list()
 
+    def open_folder(self, group_name):
+        self.current_folder = group_name
+        self.render_task_list()
+
+    def go_back_to_root(self):
+        self.current_folder = None
+        self.render_task_list()
+
+    def rename_group(self, old_name):
+        """Opens a grab-focused, beautifully styled modal to rename a category/group name."""
+        lang = self.current_lang
+        
+        dialog = ctk.CTkToplevel(self.root)
+        dialog.title(self.loc[lang]["rename_group_title"])
+        dialog.geometry("380x220")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.configure(fg_color="#111827")
+        dialog.grab_set()
+        
+        # Center relative to root
+        self.root.update_idletasks()
+        rx = self.root.winfo_x()
+        ry = self.root.winfo_y()
+        rw = self.root.winfo_width()
+        rh = self.root.winfo_height()
+        dw, dh = 380, 220
+        x = rx + (rw - dw) // 2
+        y = ry + (rh - dh) // 2
+        dialog.geometry(f"{dw}x{dh}+{x}+{y}")
+        
+        if pywinstyles:
+            try:
+                pywinstyles.apply_style(dialog, "acrylic")
+                pywinstyles.change_header_color(dialog, "#111827")
+                pywinstyles.change_title_color(dialog, "#60A5FA")
+            except Exception:
+                pass
+                
+        title_font = ctk.CTkFont(family="Segoe UI", size=15, weight="bold")
+        label_font = ctk.CTkFont(family="Segoe UI", size=12, weight="bold")
+        info_font = ctk.CTkFont(family="Segoe UI", size=12)
+        
+        header_lbl = ctk.CTkLabel(
+            dialog,
+            text=self.loc[lang]["rename_group_header"],
+            font=title_font,
+            text_color="#60A5FA"
+        )
+        header_lbl.pack(anchor="w", padx=20, pady=(15, 8))
+        
+        form_frame = ctk.CTkFrame(
+            dialog,
+            corner_radius=10,
+            fg_color="#1E293B",
+            border_width=1,
+            border_color="#334155"
+        )
+        form_frame.pack(fill="both", expand=True, padx=20, pady=(0, 15))
+        
+        name_lbl = ctk.CTkLabel(form_frame, text=self.loc[lang]["rename_group_label"], font=label_font, text_color="#E5E7EB")
+        name_lbl.pack(anchor="w", padx=15, pady=(10, 2))
+        
+        entry = ctk.CTkEntry(
+            form_frame,
+            font=info_font,
+            height=32,
+            border_color="#4B5563"
+        )
+        entry.pack(fill="x", padx=15, pady=(0, 10))
+        entry.insert(0, old_name)
+        entry.focus_set()
+        entry.select_range(0, 'end')
+        
+        error_lbl = ctk.CTkLabel(form_frame, text="", font=info_font, text_color="#EF4444")
+        error_lbl.pack(pady=1)
+        
+        btn_row = ctk.CTkFrame(form_frame, fg_color="transparent")
+        btn_row.pack(fill="x", padx=15, pady=(5, 10))
+        
+        cancel_btn = ctk.CTkButton(
+            btn_row,
+            text=self.loc[lang]["dialog_cancel"],
+            font=label_font,
+            height=28,
+            fg_color="#374151",
+            hover_color="#4B5563",
+            command=dialog.destroy
+        )
+        cancel_btn.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        
+        def save_rename():
+            new_name = entry.get().strip()
+            if not new_name:
+                error_lbl.configure(text=self.loc[lang]["error_msg_empty"])
+                return
+            if new_name == old_name:
+                dialog.destroy()
+                return
+                
+            # Perform renaming thread-safely
+            with self.lock:
+                for t in self.tasks:
+                    if t.get("group") == old_name:
+                        t["group"] = new_name
+                        
+            if self.current_folder == old_name:
+                self.current_folder = new_name
+                
+            self.save_config()
+            self.update_group_combobox_values()
+            self.render_task_list()
+            dialog.destroy()
+            
+        save_btn = ctk.CTkButton(
+            btn_row,
+            text=self.loc[lang]["dialog_save"],
+            font=label_font,
+            height=28,
+            fg_color="#2563EB",
+            hover_color="#1D4ED8",
+            command=save_rename
+        )
+        save_btn.pack(side="right", fill="x", expand=True)
+        
+        entry.bind("<Return>", lambda e: save_rename())
+
     def render_task_list(self):
         """Redraws the scrollable frame with highly responsive rounded card sub-frames."""
         if not self.root or not self.root.winfo_exists():
@@ -2162,22 +2340,164 @@ class TimerApp:
             
         lang = self.current_lang
 
-        # Get active filter selection
-        active_filter = self.filter_combobox.get() if hasattr(self, "filter_combobox") else self.loc[lang]["filter_all"]
-        
-        # Filter tasks
-        if active_filter != self.loc[lang]["filter_all"]:
-            tasks_copy = [t for t in tasks_copy if t.get("group") == active_filter]
-
-        # Sort tasks: default group first, then alphabetically, then by creation time
-        default_grp = self.loc[lang]["group_default"]
-        def get_sort_key(t):
-            grp = t.get("group", default_grp)
-            is_default = 0 if grp == default_grp else 1
-            return (is_default, grp.lower(), t.get("created_at", 0))
+        # If current_folder is None: render the Folder cards directory!
+        if self.current_folder is None:
+            # 1. Update List Title
+            self.list_title_label.configure(text=self.loc[lang]["folder_title"])
             
-        tasks_copy = sorted(tasks_copy, key=get_sort_key)
+            # 2. Extract unique group names and count tasks in each
+            grps = self.get_all_group_names()
+            
+            # 3. Create folder cards in grid
+            width = self.task_list_frame._parent_canvas.winfo_width()
+            cols = 2 if width >= 580 else 1
+            
+            for c in range(10):
+                self.task_list_frame.grid_columnconfigure(c, weight=0, minsize=0)
+            for c in range(cols):
+                self.task_list_frame.grid_columnconfigure(c, weight=1, minsize=260)
+                
+            for idx, gname in enumerate(grps):
+                g_tasks = [t for t in tasks_copy if t.get("group") == gname]
+                task_count = len(g_tasks)
+                
+                fcard = ctk.CTkFrame(
+                    self.task_list_frame,
+                    fg_color="#1E293B",
+                    corner_radius=12,
+                    border_width=1,
+                    border_color="#334155",
+                    cursor="hand2"
+                )
+                self.task_card_widgets[f"folder_{gname}"] = fcard
+                
+                fcard.grid_columnconfigure(0, weight=0)
+                fcard.grid_columnconfigure(1, weight=1)
+                fcard.grid_columnconfigure(2, weight=0)
+                
+                def open_handler(event, g=gname):
+                    self.open_folder(g)
+                    
+                fcard.bind("<Button-1>", open_handler)
+                
+                # Mint green folder icon
+                icon_canvas = CTkFolderIcon(fcard, size=48, bg_color="#1E293B", folder_color="#A7F3D0")
+                icon_canvas.grid(row=0, column=0, padx=(15, 10), pady=15, sticky="w")
+                icon_canvas.bind("<Button-1>", open_handler)
+                
+                # Text Frame (to stack title and count)
+                txt_frame = ctk.CTkFrame(fcard, fg_color="transparent")
+                txt_frame.grid(row=0, column=1, pady=15, sticky="w")
+                txt_frame.bind("<Button-1>", open_handler)
+                
+                display_name = gname[:15] + "..." if len(gname) > 15 else gname
+                name_lbl = ctk.CTkLabel(
+                    txt_frame,
+                    text=display_name,
+                    font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+                    text_color="#F3F4F6",
+                    anchor="w"
+                )
+                name_lbl.pack(anchor="w")
+                name_lbl.bind("<Button-1>", open_handler)
+                
+                count_str = self.loc[lang]["folder_tasks_count"].format(count=task_count)
+                count_lbl = ctk.CTkLabel(
+                    txt_frame,
+                    text=count_str,
+                    font=ctk.CTkFont(family="Segoe UI", size=12),
+                    text_color="#9CA3AF",
+                    anchor="w"
+                )
+                count_lbl.pack(anchor="w")
+                count_lbl.bind("<Button-1>", open_handler)
+                
+                # Edit / Rename Button
+                edit_btn = ctk.CTkButton(
+                    fcard,
+                    text="✏️",
+                    width=28,
+                    height=28,
+                    fg_color="#374151",
+                    hover_color="#3B82F6",
+                    corner_radius=6,
+                    font=("Segoe UI", 10),
+                    command=lambda old_g=gname: self.rename_group(old_g)
+                )
+                edit_btn.grid(row=0, column=2, padx=15, pady=15, sticky="e")
+                
+                # Place card in grid
+                r = idx // cols
+                c = idx % cols
+                fcard.grid(row=r, column=c, padx=10, pady=10, sticky="ew")
+                
+            self.adjust_scrollbar_visibility()
+            return
 
+        # If current_folder is active: show the directory of tasks!
+        # 1. Update List Title
+        self.list_title_label.configure(text=self.loc[lang]["list_title"])
+        
+        # 2. Render Directory Navigation Header at the very top of self.task_list_frame
+        header_frame = ctk.CTkFrame(
+            self.task_list_frame,
+            fg_color="#1E293B",
+            corner_radius=8,
+            border_width=1,
+            border_color="#334155",
+            height=44
+        )
+        
+        width = self.task_list_frame._parent_canvas.winfo_width()
+        if width <= 200:
+            cols = 1
+        elif width >= 1050:
+            cols = 3
+        elif width >= 680:
+            cols = 2
+        else:
+            cols = 1
+            
+        header_frame.grid(row=0, column=0, columnspan=cols, padx=8, pady=(4, 12), sticky="ew")
+        
+        back_btn = ctk.CTkButton(
+            header_frame,
+            text="←",
+            font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+            width=28,
+            height=28,
+            fg_color="#374151",
+            hover_color="#4B5563",
+            corner_radius=6,
+            command=self.go_back_to_root
+        )
+        back_btn.pack(side="left", padx=(10, 8), pady=8)
+        
+        path_text = f".  /  {self.current_folder}"
+        path_lbl = ctk.CTkLabel(
+            header_frame,
+            text=path_text,
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        path_lbl.pack(side="left", padx=5)
+        
+        rename_btn = ctk.CTkButton(
+            header_frame,
+            text="✏️",
+            width=22,
+            height=22,
+            fg_color="#374151",
+            hover_color="#3B82F6",
+            corner_radius=4,
+            font=("Segoe UI", 9),
+            command=lambda old_g=self.current_folder: self.rename_group(old_g)
+        )
+        rename_btn.pack(side="left", padx=8)
+        
+        # 3. Filter tasks copy to folder
+        tasks_copy = [t for t in tasks_copy if t.get("group") == self.current_folder]
+        
         if not tasks_copy:
             empty_label = ctk.CTkLabel(
                 self.task_list_frame,
@@ -2185,9 +2505,12 @@ class TimerApp:
                 font=ctk.CTkFont(family="Segoe UI", size=13),
                 text_color="#9CA3AF"
             )
-            empty_label.pack(pady=40)
+            empty_label.grid(row=1, column=0, columnspan=cols, pady=40)
+            self.adjust_scrollbar_visibility()
             return
             
+        tasks_copy = sorted(tasks_copy, key=lambda t: t.get("created_at", 0))
+
         for task in tasks_copy:
             task_id = task["id"]
             
