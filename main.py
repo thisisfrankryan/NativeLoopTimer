@@ -1044,19 +1044,18 @@ class TimerApp:
         )
         form_frame.pack(fill="both", expand=True, padx=25, pady=(0, 15))
         
-        # 1. Remarks (Name) Textbox
-        name_lbl = ctk.CTkLabel(form_frame, text=self.loc[lang]["msg_label"], font=label_font, text_color="#E5E7EB")
-        name_lbl.pack(anchor="w", padx=20, pady=(12, 2))
+        # 1. Group Selector
+        group_lbl = ctk.CTkLabel(form_frame, text=self.loc[lang]["group_label"], font=label_font, text_color="#E5E7EB")
+        group_lbl.pack(anchor="w", padx=20, pady=(12, 2))
         
-        name_textbox = ctk.CTkTextbox(
+        group_combo = ctk.CTkComboBox(
             form_frame,
+            values=self.get_all_group_names(),
             font=info_font,
-            height=60,
-            border_color="#4B5563",
-            border_width=1
+            height=32
         )
-        name_textbox.pack(fill="x", padx=20, pady=(0, 10))
-        name_textbox.insert("1.0", target_task["name"])
+        group_combo.pack(fill="x", padx=20, pady=(0, 10))
+        group_combo.set(target_task.get("group", self.loc[lang]["group_default"]))
         
         # 2. Conditional Fields
         dialog_repeat_vars = []
@@ -1235,18 +1234,19 @@ class TimerApp:
             if current_repeat_days and len(current_repeat_days) == 7:
                 everyday_v.set(True)
                 
-        # 2.5 Group Selector
-        group_lbl = ctk.CTkLabel(form_frame, text=self.loc[lang]["group_label"], font=label_font, text_color="#E5E7EB")
-        group_lbl.pack(anchor="w", padx=20, pady=(8, 2))
+        # 2.8 Remarks (Name) Textbox
+        name_lbl = ctk.CTkLabel(form_frame, text=self.loc[lang]["msg_label"], font=label_font, text_color="#E5E7EB")
+        name_lbl.pack(anchor="w", padx=20, pady=(8, 2))
         
-        group_combo = ctk.CTkComboBox(
+        name_textbox = ctk.CTkTextbox(
             form_frame,
-            values=self.get_all_group_names(),
             font=info_font,
-            height=32
+            height=60,
+            border_color="#4B5563",
+            border_width=1
         )
-        group_combo.pack(fill="x", padx=20, pady=(0, 8))
-        group_combo.set(target_task.get("group", self.loc[lang]["group_default"]))
+        name_textbox.pack(fill="x", padx=20, pady=(0, 8))
+        name_textbox.insert("1.0", target_task["name"])
 
         # 3. Sound Selector
         sound_lbl = ctk.CTkLabel(form_frame, text=self.loc[lang]["sound_label"], font=label_font, text_color="#E5E7EB")
@@ -1709,22 +1709,23 @@ class TimerApp:
             self.repeat_vars.append((i + 1, var))
             self.repeat_checkboxes.append(cb)
             
-        # Common Input: Group Picker
-        self.group_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["group_label"], font=label_font, text_color="#E5E7EB")
-        self.group_label.pack(anchor="w", padx=20, pady=(5, 2))
+        # Common Input: Message Text
+        self.msg_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["msg_label"], font=label_font, text_color="#E5E7EB")
+        self.msg_label.pack(anchor="w", padx=20, pady=(12, 2))
         
-        self.group_combobox = ctk.CTkComboBox(
-            form_frame,
-            values=[self.loc[lang]["group_default"]],
+        self.msg_entry = ctk.CTkTextbox(
+            form_frame, 
             font=info_font,
-            height=32
+            height=60,
+            border_color="#4B5563",
+            border_width=1
         )
-        self.group_combobox.pack(fill="x", padx=20, pady=(0, 10))
-        self.group_combobox.set(self.loc[lang]["group_default"])
+        self.msg_entry.pack(fill="x", padx=20, pady=(0, 10))
+        self.msg_entry.insert("1.0", self.loc[lang]["msg_default"])
 
         # Common Input: Sound Picker
         self.sound_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["sound_label"], font=label_font, text_color="#E5E7EB")
-        self.sound_label.pack(anchor="w", padx=20, pady=(5, 2))
+        self.sound_label.pack(anchor="w", padx=20, pady=(10, 2))
         
         self.sound_combobox = ctk.CTkComboBox(
             form_frame,
@@ -1735,21 +1736,20 @@ class TimerApp:
             state="readonly"
         )
         self.sound_combobox.pack(fill="x", padx=20, pady=(0, 10))
-        self.sound_combobox.set("🔔 经典闹铃 (Classic Alarm)" if lang == "zh" else "🔔 Classic Alarm")
- 
-        # Common Input: Message Text
-        self.msg_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["msg_label"], font=label_font, text_color="#E5E7EB")
-        self.msg_label.pack(anchor="w", padx=20, pady=(15, 2))
+        self.sound_combobox.set("🔔 温馨叮咚 (Warm Ding)" if lang == "zh" else "🔔 Warm Ding")
+
+        # Common Input: Group Picker
+        self.group_label = ctk.CTkLabel(form_frame, text=self.loc[lang]["group_label"], font=label_font, text_color="#E5E7EB")
+        self.group_label.pack(anchor="w", padx=20, pady=(10, 2))
         
-        self.msg_entry = ctk.CTkTextbox(
-            form_frame, 
+        self.group_combobox = ctk.CTkComboBox(
+            form_frame,
+            values=[self.loc[lang]["group_default"]],
             font=info_font,
-            height=60,
-            border_color="#4B5563",
-            border_width=1
+            height=32
         )
-        self.msg_entry.pack(fill="x", padx=20, pady=(0, 15))
-        self.msg_entry.insert("1.0", self.loc[lang]["msg_default"])
+        self.group_combobox.pack(fill="x", padx=20, pady=(0, 15))
+        self.group_combobox.set(self.loc[lang]["group_default"])
         
 
         
@@ -2273,8 +2273,8 @@ class TimerApp:
         self.everyday_var.set(False)
         for _, var in self.repeat_vars:
             var.set(False)
-        self.sound_combobox.set("🔔 经典闹铃 (Classic Alarm)" if lang == "zh" else "🔔 Classic Alarm")
-        self.group_combobox.set(self.loc[lang]["group_default"])
+        self.sound_combobox.set("🔔 温馨叮咚 (Warm Ding)" if lang == "zh" else "🔔 Warm Ding")
+        self.group_combobox.set(self.current_folder if self.current_folder else self.loc[lang]["group_default"])
         self.msg_entry.delete("1.0", "end")
         self.msg_entry.insert("1.0", self.loc[lang]["msg_default"])
         
@@ -2283,10 +2283,12 @@ class TimerApp:
 
     def open_folder(self, group_name):
         self.current_folder = group_name
+        self.group_combobox.set(group_name)
         self.render_task_list()
 
     def go_back_to_root(self):
         self.current_folder = None
+        self.group_combobox.set(self.loc[self.current_lang]["group_default"])
         self.render_task_list()
 
     def rename_group(self, old_name):
