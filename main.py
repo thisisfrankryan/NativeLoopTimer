@@ -498,7 +498,7 @@ class PiPWindow(ctk.CTkToplevel):
 
 
 class TimerApp:
-    def __init__(self):
+    def __init__(self, config_dir=None):
         # Default state
         self.tasks = []
         self.is_running = True
@@ -522,6 +522,28 @@ class TimerApp:
         self.app_dir = os.path.dirname(os.path.abspath(sys.argv[0] if getattr(sys, 'frozen', False) else __file__))
         self.ico_path = os.path.join(self.app_dir, "app_icon.ico")
         self.png_path = os.path.join(self.app_dir, "app_icon.png")
+        
+        # Determine config directory (independent of app_dir for robustness)
+        if config_dir:
+            self.config_dir = config_dir
+        else:
+            appdata_dir = os.environ.get("APPDATA")
+            if appdata_dir:
+                self.config_dir = os.path.join(appdata_dir, "NativeLoopTimer")
+            else:
+                self.config_dir = self.app_dir
+                
+        os.makedirs(self.config_dir, exist_ok=True)
+        
+        # Migrate old local config.json if it exists and appdata config does not exist yet
+        local_config = os.path.join(self.app_dir, "config.json")
+        appdata_config = os.path.join(self.config_dir, "config.json")
+        if not config_dir and os.path.exists(local_config) and not os.path.exists(appdata_config):
+            try:
+                import shutil
+                shutil.copy2(local_config, appdata_config)
+            except Exception:
+                pass
         
         # Localization data
         self.loc = {
@@ -759,7 +781,7 @@ class TimerApp:
 
     def load_config(self):
         """Loads and normalizes task profiles from config.json."""
-        config_path = os.path.join(self.app_dir, "config.json")
+        config_path = os.path.join(self.config_dir, "config.json")
         if not os.path.exists(config_path):
             self.current_lang = "zh"
             return []
@@ -793,7 +815,7 @@ class TimerApp:
 
     def save_config(self):
         """Saves current memory task configurations into local config.json."""
-        config_path = os.path.join(self.app_dir, "config.json")
+        config_path = os.path.join(self.config_dir, "config.json")
         try:
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump({"tasks": self.tasks, "language": self.current_lang}, f, ensure_ascii=False, indent=2)

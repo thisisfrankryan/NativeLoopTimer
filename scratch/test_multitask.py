@@ -8,6 +8,11 @@ import uuid
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from main import TimerApp, calculate_next_alarm
 
+# Isolated test config directory to protect production settings
+app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+test_config_dir = os.path.join(app_dir, "test_config")
+os.makedirs(test_config_dir, exist_ok=True)
+
 def test_alarm_scheduler():
     print("\n=== Testing Alarm Scheduler Logic ===")
     
@@ -43,13 +48,12 @@ def test_alarm_scheduler():
 def test_concurrency_and_persistence():
     print("\n=== Testing Concurrency & Persistence ===")
     
-    # Clear config first to start fresh
-    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    config_path = os.path.join(app_dir, "config.json")
+    # Clear test config directory first to start fresh
+    config_path = os.path.join(test_config_dir, "config.json")
     if os.path.exists(config_path):
         os.remove(config_path)
         
-    app = TimerApp()
+    app = TimerApp(config_dir=test_config_dir)
     
     # Add a relative Timer (0.02 mins = 1.2s)
     # Simulate adding via GUI
@@ -108,7 +112,7 @@ def test_concurrency_and_persistence():
 
 def test_merged_sleep_compensation():
     print("\n=== Testing Merged Wakeup Compensation ===")
-    app = TimerApp()
+    app = TimerApp(config_dir=test_config_dir)
     
     # Simulate two expired tasks due to sleep
     task1 = {
@@ -152,7 +156,7 @@ def test_merged_sleep_compensation():
 
 def test_intelligent_time_parsing():
     print("\n=== Testing Intelligent Time Parsing ===")
-    app = TimerApp()
+    app = TimerApp(config_dir=test_config_dir)
     
     assert app.validate_alarm_time("830") == "08:30", f"Expected 08:30, got {app.validate_alarm_time('830')}"
     assert app.validate_alarm_time("8 30") == "08:30"
@@ -174,7 +178,7 @@ def test_intelligent_time_parsing():
 
 def test_manual_reset():
     print("\n=== Testing Manual Reset ===")
-    app = TimerApp()
+    app = TimerApp(config_dir=test_config_dir)
     
     # 1. Timer Reset while active (not paused)
     task1 = {
@@ -284,3 +288,9 @@ if __name__ == "__main__":
                     os.remove(config_path)
                 except Exception:
                     pass
+        # Clean up the isolated test config folder
+        if os.path.exists(test_config_dir):
+            try:
+                shutil.rmtree(test_config_dir)
+            except Exception:
+                pass
