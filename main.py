@@ -2181,8 +2181,12 @@ class TimerApp:
                 cols = 1
                 
             with self.lock:
-                tasks_copy = [t for t in self.tasks if t.get("group") == self.current_folder]
-            tasks_copy = sorted(tasks_copy, key=lambda t: t.get("created_at", 0))
+                tasks_copy = list(self.tasks)
+            if self.current_folder != "__all_tasks__":
+                tasks_copy = [t for t in tasks_copy if t.get("group") == self.current_folder]
+                tasks_copy = sorted(tasks_copy, key=lambda t: t.get("created_at", 0))
+            else:
+                tasks_copy = sorted(tasks_copy, key=lambda t: (t.get("is_paused", False), t.get("created_at", 0)))
             
             for c in range(10):
                 self.task_list_frame.grid_columnconfigure(c, weight=0, minsize=0)
@@ -2280,7 +2284,8 @@ class TimerApp:
             self.tasks.append(new_task)
             
         self.save_config()
-        self.current_folder = grp_str
+        if self.current_folder != "__all_tasks__":
+            self.current_folder = grp_str
         self.update_group_combobox_values()
         
         # Display green success text
@@ -2298,7 +2303,10 @@ class TimerApp:
         for _, var in self.repeat_vars:
             var.set(False)
         self.sound_combobox.set("🔔 温馨叮咚 (Warm Ding)" if lang == "zh" else "🔔 Warm Ding")
-        self.group_combobox.set(self.current_folder if self.current_folder else self.loc[lang]["group_default"])
+        if self.current_folder == "__all_tasks__":
+            self.group_combobox.set(grp_str)
+        else:
+            self.group_combobox.set(self.current_folder if self.current_folder else self.loc[lang]["group_default"])
         self.msg_entry.delete("1.0", "end")
         self.msg_entry.insert("1.0", self.loc[lang]["msg_default"])
         
