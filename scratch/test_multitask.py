@@ -247,9 +247,40 @@ def test_manual_reset():
     print("✅ Manual Reset unit tests PASSED!")
 
 if __name__ == "__main__":
-    test_intelligent_time_parsing()
-    test_alarm_scheduler()
-    test_concurrency_and_persistence()
-    test_merged_sleep_compensation()
-    test_manual_reset()
-    print("\n🏆 All tests passed successfully!")
+    import shutil
+    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config_path = os.path.join(app_dir, "config.json")
+    backup_path = os.path.join(app_dir, "config.json.bak")
+    
+    # Safely back up the production config if it exists
+    has_backup = False
+    if os.path.exists(config_path):
+        try:
+            shutil.copy2(config_path, backup_path)
+            has_backup = True
+        except Exception as e:
+            print(f"Warning: Could not create config backup: {e}")
+            
+    try:
+        test_intelligent_time_parsing()
+        test_alarm_scheduler()
+        test_concurrency_and_persistence()
+        test_merged_sleep_compensation()
+        test_manual_reset()
+        print("\n🏆 All tests passed successfully!")
+    finally:
+        # Restore the backup config if it was successfully backed up
+        if has_backup:
+            try:
+                shutil.copy2(backup_path, config_path)
+                os.remove(backup_path)
+                print("\n[Test Suite] Restored original config.json successfully.")
+            except Exception as e:
+                print(f"Error: Could not restore config backup: {e}")
+        else:
+            # If there was no original config, clean up the test-generated config file
+            if os.path.exists(config_path):
+                try:
+                    os.remove(config_path)
+                except Exception:
+                    pass
