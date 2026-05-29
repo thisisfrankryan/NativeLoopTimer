@@ -619,7 +619,10 @@ class TimerApp:
                 "tip_rename": "重命名分组",
                 "tip_back": "返回",
                 "tip_lang": "切换语言 (Toggle Language)",
-                "tip_pip": "画中画模式 (PiP Mode)"
+                "tip_pip": "画中画模式 (PiP Mode)",
+                "view_all_tasks": "🔍 查看全部任务",
+                "all_tasks_title": "全部任务",
+                "tip_view_all": "查看所有分组的任务"
             },
             "en": {
                 "title": "⏰ Multi-Task Native Timer Center",
@@ -693,7 +696,10 @@ class TimerApp:
                 "tip_rename": "Rename Group",
                 "tip_back": "Back",
                 "tip_lang": "Toggle Language",
-                "tip_pip": "PiP Mode"
+                "tip_pip": "PiP Mode",
+                "view_all_tasks": "🔍 View All Tasks",
+                "all_tasks_title": "All Tasks",
+                "tip_view_all": "View tasks from all groups"
             }
         }
         self.current_lang = "zh"
@@ -1487,6 +1493,23 @@ class TimerApp:
         )
         self.list_title_label.pack(side="left", anchor="w")
 
+        # "View All Tasks" button on the right side of the list title
+        self.view_all_btn = ctk.CTkButton(
+            controls_frame,
+            text=self.loc[lang]["view_all_tasks"],
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            height=26,
+            fg_color="#1E293B",
+            hover_color="#334155",
+            text_color="#60A5FA",
+            border_width=1,
+            border_color="#4B5563",
+            corner_radius=6,
+            command=self.show_all_tasks
+        )
+        self.view_all_btn.pack(side="left", padx=(10, 0))
+        CTkToolTip(self.view_all_btn, lambda: self.loc[self.current_lang]["tip_view_all"])
+
 
         
         # Pause All and Resume All buttons on the right side of the list title
@@ -1919,6 +1942,7 @@ class TimerApp:
         self.global_pause_btn.configure(text=self.loc[lang]["pause_all"])
         self.global_resume_btn.configure(text=self.loc[lang]["resume_all"])
         self.list_title_label.configure(text=self.loc[lang]["list_title"])
+        self.view_all_btn.configure(text=self.loc[lang]["view_all_tasks"])
         
         # 9. Active Tasks and System Tray Menu
         self.render_task_list()
@@ -2291,6 +2315,10 @@ class TimerApp:
         self.group_combobox.set(self.loc[self.current_lang]["group_default"])
         self.render_task_list()
 
+    def show_all_tasks(self):
+        self.current_folder = "__all_tasks__"
+        self.render_task_list()
+
     def rename_group(self, old_name):
         """Opens a grab-focused, beautifully styled modal to rename a category/group name."""
         lang = self.current_lang
@@ -2430,6 +2458,12 @@ class TimerApp:
             
         lang = self.current_lang
 
+        # Show/hide the "View All Tasks" button based on folder context
+        if self.current_folder is None:
+            self.view_all_btn.pack(side="left", padx=(10, 0))
+        else:
+            self.view_all_btn.pack_forget()
+
         # If current_folder is None: render the Folder cards directory!
         if self.current_folder is None:
             # 1. Update List Title
@@ -2527,7 +2561,10 @@ class TimerApp:
 
         # If current_folder is active: show the directory of tasks!
         # 1. Update List Title
-        self.list_title_label.configure(text=self.loc[lang]["list_title"])
+        if self.current_folder == "__all_tasks__":
+            self.list_title_label.configure(text=self.loc[lang]["all_tasks_title"])
+        else:
+            self.list_title_label.configure(text=self.loc[lang]["list_title"])
         
         # 2. Render Directory Navigation Header at the very top of self.task_list_frame
         header_frame = ctk.CTkFrame(
@@ -2565,7 +2602,11 @@ class TimerApp:
         back_btn.pack(side="left", padx=(10, 8), pady=8)
         CTkToolTip(back_btn, self.loc[lang]["tip_back"])
         
-        path_text = f".  /  {self.current_folder}"
+        if self.current_folder == "__all_tasks__":
+            path_text = f".  /  {self.loc[lang]['all_tasks_title']}"
+        else:
+            path_text = f".  /  {self.current_folder}"
+            
         path_lbl = ctk.CTkLabel(
             header_frame,
             text=path_text,
@@ -2574,22 +2615,24 @@ class TimerApp:
         )
         path_lbl.pack(side="left", padx=5)
         
-        rename_btn = ctk.CTkButton(
-            header_frame,
-            text="✏️",
-            width=22,
-            height=22,
-            fg_color="#374151",
-            hover_color="#3B82F6",
-            corner_radius=4,
-            font=("Segoe UI", 9),
-            command=lambda old_g=self.current_folder: self.rename_group(old_g)
-        )
-        rename_btn.pack(side="left", padx=8)
-        CTkToolTip(rename_btn, self.loc[lang]["tip_rename"])
+        if self.current_folder != "__all_tasks__":
+            rename_btn = ctk.CTkButton(
+                header_frame,
+                text="✏️",
+                width=22,
+                height=22,
+                fg_color="#374151",
+                hover_color="#3B82F6",
+                corner_radius=4,
+                font=("Segoe UI", 9),
+                command=lambda old_g=self.current_folder: self.rename_group(old_g)
+            )
+            rename_btn.pack(side="left", padx=8)
+            CTkToolTip(rename_btn, self.loc[lang]["tip_rename"])
         
         # 3. Filter tasks copy to folder
-        tasks_copy = [t for t in tasks_copy if t.get("group") == self.current_folder]
+        if self.current_folder != "__all_tasks__":
+            tasks_copy = [t for t in tasks_copy if t.get("group") == self.current_folder]
         
         if not tasks_copy:
             empty_label = ctk.CTkLabel(
@@ -2602,7 +2645,11 @@ class TimerApp:
             self.adjust_scrollbar_visibility()
             return
             
-        tasks_copy = sorted(tasks_copy, key=lambda t: t.get("created_at", 0))
+        if self.current_folder == "__all_tasks__":
+            # Active tasks (is_paused == False -> 0) come first, Paused tasks (is_paused == True -> 1) come last
+            tasks_copy = sorted(tasks_copy, key=lambda t: (t.get("is_paused", False), t.get("created_at", 0)))
+        else:
+            tasks_copy = sorted(tasks_copy, key=lambda t: t.get("created_at", 0))
 
         for task in tasks_copy:
             task_id = task["id"]

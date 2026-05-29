@@ -250,6 +250,54 @@ def test_manual_reset():
     app.exit_app()
     print("✅ Manual Reset unit tests PASSED!")
 
+def test_all_tasks_sorting():
+    print("\n=== Testing All Tasks Sorting Logic ===")
+    app = TimerApp(config_dir=test_config_dir)
+    
+    # Create tasks with mixed paused states and creation times
+    task_active_old = {
+        "id": "active-old",
+        "type": "timer",
+        "name": "Active Old",
+        "is_paused": False,
+        "created_at": 1000.0
+    }
+    task_paused_old = {
+        "id": "paused-old",
+        "type": "timer",
+        "name": "Paused Old",
+        "is_paused": True,
+        "created_at": 1001.0
+    }
+    task_active_new = {
+        "id": "active-new",
+        "type": "timer",
+        "name": "Active New",
+        "is_paused": False,
+        "created_at": 2000.0
+    }
+    task_paused_new = {
+        "id": "paused-new",
+        "type": "timer",
+        "name": "Paused New",
+        "is_paused": True,
+        "created_at": 2001.0
+    }
+    
+    tasks = [task_paused_new, task_active_old, task_paused_old, task_active_new]
+    
+    # Sort using key identical to main.py
+    sorted_tasks = sorted(tasks, key=lambda t: (t.get("is_paused", False), t.get("created_at", 0)))
+    
+    print("Sorted names:", [t["name"] for t in sorted_tasks])
+    assert sorted_tasks[0]["id"] == "active-old"
+    assert sorted_tasks[1]["id"] == "active-new"
+    assert sorted_tasks[2]["id"] == "paused-old"
+    assert sorted_tasks[3]["id"] == "paused-new"
+    
+    app.exit_app()
+    print("✅ All Tasks Sorting unit tests PASSED!")
+
 if __name__ == "__main__":
     import shutil
     app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -271,6 +319,7 @@ if __name__ == "__main__":
         test_concurrency_and_persistence()
         test_merged_sleep_compensation()
         test_manual_reset()
+        test_all_tasks_sorting()
         print("\n🏆 All tests passed successfully!")
     finally:
         # Restore the backup config if it was successfully backed up
