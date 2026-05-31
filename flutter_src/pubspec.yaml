@@ -29,6 +29,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Asset bundling for the standalone Python backend executable
+  # Asset bundling for the standalone Python backend executable and UI icons
   assets:
     - assets/backend.exe
+    - assets/app_icon.ico
+    - assets/app_icon.png
