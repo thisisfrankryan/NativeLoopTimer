@@ -8,6 +8,7 @@ import json
 import uuid
 import re
 import winsound
+import math
 from PIL import Image, ImageDraw
 import pystray
 import customtkinter as ctk
@@ -104,7 +105,7 @@ class PowerMonitor:
 
 class CTkCircularTimer(tk.Canvas):
     def __init__(self, parent, size=280, bg_color="#1E293B", color="#10B981"):
-        super().__init__(parent, width=size, height=size, bg=bg_color, highlightthickness=0)
+        super().__init__(parent, width=size, height=size, bg="#111827", highlightthickness=0)
         self.size = size
         self.color = color
         self.ratio = 1.0
@@ -112,6 +113,12 @@ class CTkCircularTimer(tk.Canvas):
         self.time_str = "00:00"
         self.bg_color = bg_color
         self.draw()
+        self.animate() # Start continuous wave animation loop
+
+    def animate(self):
+        if self.winfo_exists():
+            self.draw()
+            self.after(40, self.animate) # Smooth 25fps fluid rippling
 
     def set_progress(self, ratio, is_paused=False, color=None, time_str="00:00"):
         self.ratio = max(0.0, min(1.0, ratio))
@@ -119,57 +126,119 @@ class CTkCircularTimer(tk.Canvas):
         if color:
             self.color = color
         self.time_str = time_str
-        self.draw()
 
     def draw(self):
+        import math
         self.delete("all")
         s = self.size
         cx = s / 2
         cy = s / 2
         
         # Radii definitions
-        outer_r = (s / 2) - 15  # Outer border ring radius
-        inner_max_r = outer_r - 10  # Max radius of the shrinking solid circle
+        outer_r = (s / 2) - 15  # Outer ring track
+        inner_max_r = outer_r - 8  # Wave sphere container
         
-        # Define high-end soft dual-tone color mapping
-        # Green: ring #10B981, shrinking circle #064E3B
-        # Yellow: ring #F59E0B, shrinking circle #78350F
-        # Red: ring #EF4444, shrinking circle #7F1D1D
-        ring_color = self.color
-        if self.color == "#10B981": # Green
-            fill_color = "#064E3B"
-        elif self.color == "#F59E0B": # Yellow
+        # Setup vibrant color schemes
+        if self.color == "#10B981": # Green (Active)
+            fill_color = "#047857"
+            light_wave = "#10B981"
+            glow_rgb = (16, 185, 129)
+        elif self.color == "#F59E0B": # Yellow (Paused)
             fill_color = "#78350F"
-        elif self.color == "#EF4444": # Red
+            light_wave = "#FBBF24"
+            glow_rgb = (245, 158, 11)
+        elif self.color == "#EF4444": # Red (Stopped / Alert)
             fill_color = "#7F1D1D"
-        else:
-            fill_color = "#1E3A8A" # Fallback deep blue
+            light_wave = "#EF4444"
+            glow_rgb = (239, 68, 68)
+        else: # Blue (Idle / Target)
+            fill_color = "#1E3A8A"
+            light_wave = "#60A5FA"
+            glow_rgb = (59, 130, 246)
             
-        # 1. Draw outer background ring track (slate gray)
+        # 1. 🌌 Concentric Ambient Glow (Simulating radial glass glow)
+        bg_rgb = (17, 24, 39) # #111827 background
+        for idx, offset in enumerate([18, 10, 4]):
+            factor = (idx + 1) * 0.055
+            br = int(bg_rgb[0] + (glow_rgb[0] - bg_rgb[0]) * factor)
+            bg = int(bg_rgb[1] + (glow_rgb[1] - bg_rgb[1]) * factor)
+            bb = int(bg_rgb[2] + (glow_rgb[2] - bg_rgb[2]) * factor)
+            self.create_oval(cx - (outer_r + offset), cy - (outer_r + offset),
+                             cx + (outer_r + offset), cy + (outer_r + offset),
+                             fill=f"#{br:02x}{bg:02x}{bb:02x}", outline="")
+                             
+        # Base container background plate
+        self.create_oval(cx - outer_r, cy - outer_r, cx + outer_r, cy + outer_r,
+                         fill="#1E293B", outline="")
+
+        if self.ratio > 0.0:
+            # Wave height coordinates based on timer ratio
+            liquid_h = cy - inner_max_r + (2 * inner_max_r * (1.0 - self.ratio))
+            left_x = int(cx - inner_max_r)
+            right_x = int(cx + inner_max_r)
+            
+            # 2. 🌊 Underlay Wave: Deeper, slower cosine wave for volumetric depth
+            coords_deep = []
+            coords_deep.extend([left_x, cy + inner_max_r])
+            for x in range(left_x, right_x + 1):
+                x_rel = x - cx
+                y_boundary = math.sqrt(max(0.0, inner_max_r**2 - x_rel**2))
+                phase = time.time() * 2.5  # Slower speed
+                wave_y = 5.0 * math.cos((x_rel / inner_max_r * 2 * math.pi) - phase) + liquid_h + 3.0
+                clamped_y = max(cy - y_boundary, min(cy + y_boundary, wave_y))
+                coords_deep.extend([x, clamped_y])
+            coords_deep.extend([right_x, cy + inner_max_r])
+            self.create_polygon(coords_deep, fill=fill_color, outline="")
+
+            # 3. 🌊 Overlay Wave: Active, faster sine wave representing foreground fluid
+            coords_active = []
+            coords_active.extend([left_x, cy + inner_max_r])
+            for x in range(left_x, right_x + 1):
+                x_rel = x - cx
+                y_boundary = math.sqrt(max(0.0, inner_max_r**2 - x_rel**2))
+                phase = time.time() * 4.0  # Faster ripple speed
+                wave_y = 7.0 * math.sin((x_rel / inner_max_r * 2 * math.pi) + phase) + liquid_h
+                clamped_y = max(cy - y_boundary, min(cy + y_boundary, wave_y))
+                coords_active.extend([x, clamped_y])
+            coords_active.extend([right_x, cy + inner_max_r])
+            self.create_polygon(coords_active, fill=light_wave, outline="")
+
+        # 4. 🥛 Translucent blurred glass plate overlay (Behind clock text for readability)
+        plate_r = inner_max_r * 0.72
+        self.create_oval(cx - plate_r, cy - plate_r, cx + plate_r, cy + plate_r,
+                         fill="#0F172A", outline="#334155", width=1)
+
+        # 5. 🟢 Outer Progress Track Ring
         self.create_oval(cx - outer_r, cy - outer_r, cx + outer_r, cy + outer_r, 
                          outline="#334155", width=4)
-                         
-        # 2. Draw active progress circular arc (winding down from 360 to 0 degrees)
         extent = -360.0 * self.ratio
         if extent != 0:
             self.create_arc(cx - outer_r, cy - outer_r, cx + outer_r, cy + outer_r,
-                            start=90, extent=extent, style="arc", outline=ring_color, width=6)
+                            start=90, extent=extent, style="arc", outline=self.color, width=6)
                             
-        # 3. Draw the shrinking solid inner circle (radius is proportional to self.ratio)
-        if self.ratio > 0.0:
-            inner_r = inner_max_r * self.ratio
-            self.create_oval(cx - inner_r, cy - inner_r, cx + inner_r, cy + inner_r,
-                             fill=fill_color, outline="")
-                             
-        # 4. Draw the centered countdown time text
+        # 6. 💎 VOLUMETRIC GLASS GLOSS SHEENS (Apple Specular Highlights)
+        # Top Specular crescent highlight
+        self.create_arc(cx - outer_r + 6, cy - outer_r + 6, cx + outer_r - 6, cy + outer_r - 6,
+                        start=50, extent=80, style="arc", outline="#FFFFFF", width=3.5)
+        # Top Secondary glare rim
+        self.create_arc(cx - outer_r + 14, cy - outer_r + 14, cx + outer_r - 14, cy + outer_r - 14,
+                        start=60, extent=60, style="arc", outline="#FFFFFF", width=1.2)
+        # Bottom Soft Reflective Rim (Ambient bounce reflection matching theme hue)
+        self.create_arc(cx - outer_r + 8, cy - outer_r + 8, cx + outer_r - 8, cy + outer_r - 8,
+                        start=230, extent=80, style="arc", outline=self.color, width=2.0)
+                        
+        # 7. Countdown time string
         font_size = int(s * 0.12)
+        # Text drop shadow
+        self.create_text(cx + 2, cy + 2, text=self.time_str, fill="#000000", 
+                         font=("Segoe UI", font_size, "bold"))
         self.create_text(cx, cy, text=self.time_str, fill="#FFFFFF", 
                          font=("Segoe UI", font_size, "bold"))
 
 
 class CTkAlarmClock(tk.Canvas):
-    def __init__(self, parent, size=28, bg_color="#1E293B", clock_color="#10B981"):
-        super().__init__(parent, width=size, height=size, bg=bg_color, highlightthickness=0)
+    def __init__(self, parent, size=280, bg_color="#1E293B", clock_color="#10B981"):
+        super().__init__(parent, width=size, height=size, bg="#111827", highlightthickness=0)
         self.size = size
         self.clock_color = clock_color
         self.is_paused = False
@@ -187,32 +256,58 @@ class CTkAlarmClock(tk.Canvas):
         s = self.size
         cx = s / 2
         cy = s / 2
-        r = (s / 2) - max(4.0, s * 0.1)
+        r = (s / 2) - 30
         
-        # Alarm feet
-        self.create_line(cx - r + max(2.0, s * 0.06), cy + r - max(1.0, s * 0.03), cx - r - max(1.0, s * 0.03), cy + r + max(2.0, s * 0.06), fill="#64748B", width=max(2.0, s * 0.06))
-        self.create_line(cx + r - max(2.0, s * 0.06), cy + r - max(1.0, s * 0.03), cx + r + max(1.0, s * 0.03), cy + r + max(2.0, s * 0.06), fill="#64748B", width=max(2.0, s * 0.06))
+        # Determine color states
+        accent_color = self.clock_color
+        glow_color = "#10B981" if self.clock_color == "#10B981" else ("#F59E0B" if self.clock_color == "#F59E0B" else "#EF4444")
+        
+        # 1. Background radial glow
+        bg_rgb = (17, 24, 39)
+        glow_rgb = (16, 185, 129) if self.clock_color == "#10B981" else ((245, 158, 11) if self.clock_color == "#F59E0B" else (239, 68, 68))
+        for idx, offset in enumerate([18, 10, 4]):
+            factor = (idx + 1) * 0.05
+            br = int(bg_rgb[0] + (glow_rgb[0] - bg_rgb[0]) * factor)
+            bg = int(bg_rgb[1] + (glow_rgb[1] - bg_rgb[1]) * factor)
+            bb = int(bg_rgb[2] + (glow_rgb[2] - bg_rgb[2]) * factor)
+            self.create_oval(cx - (r + offset), cy - (r + offset),
+                             cx + (r + offset), cy + (r + offset),
+                             fill=f"#{br:02x}{bg:02x}{bb:02x}", outline="")
+        
+        # Alarm legs / feet
+        self.create_line(cx - r + 20, cy + r - 5, cx - r - 15, cy + r + 25, fill="#64748B", width=12, capstyle="round")
+        self.create_line(cx + r - 20, cy + r - 5, cx + r + 15, cy + r + 25, fill="#64748B", width=12, capstyle="round")
         
         # Twin bells at top
-        bell_r = max(2.0, s * 0.1)
-        self.create_oval(cx - r - bell_r, cy - r - bell_r, cx - r + bell_r, cy - r + bell_r, fill="#64748B", outline="")
-        self.create_oval(cx + r - bell_r, cy - r - bell_r, cx + r + bell_r, cy - r + bell_r, fill="#64748B", outline="")
+        bell_r = 25
+        self.create_oval(cx - r - 5, cy - r - 5, cx - r + 35, cy - r + 35, fill="#475569", outline="#64748B", width=2)
+        self.create_oval(cx + r - 35, cy - r - 5, cx + r + 5, cy - r + 35, fill="#475569", outline="#64748B", width=2)
         
-        # Outer clock face ring
-        self.create_oval(cx - r, cy - r, cx + r, cy + r, outline="#64748B", width=max(1.5, s * 0.05))
+        # Clock body base
+        self.create_oval(cx - r, cy - r, cx + r, cy + r, fill="#1E293B", outline="#334155", width=4)
         
-        # Clock hands at 10:10
-        hx = cx + (r * 0.45) * math.cos(math.radians(-120))
-        hy = cy + (r * 0.45) * math.sin(math.radians(-120))
-        self.create_line(cx, cy, hx, hy, fill=self.clock_color, width=max(1.5, s * 0.05), capstyle="round")
+        # Clock face plate
+        plate_r = r - 12
+        self.create_oval(cx - plate_r, cy - plate_r, cx + plate_r, cy + plate_r, fill="#0F172A", outline="")
         
-        mx = cx + (r * 0.65) * math.cos(math.radians(-30))
-        my = cy + (r * 0.65) * math.sin(math.radians(-30))
-        self.create_line(cx, cy, mx, my, fill=self.clock_color, width=max(1.2, s * 0.04), capstyle="round")
+        # Clock hour hands (10:10 format)
+        hx = cx + (plate_r * 0.45) * math.cos(math.radians(-120))
+        hy = cy + (plate_r * 0.45) * math.sin(math.radians(-120))
+        self.create_line(cx, cy, hx, hy, fill=accent_color, width=8, capstyle="round")
         
-        # Center pin dot
-        pin_r = max(1.0, s * 0.04)
-        self.create_oval(cx - pin_r, cy - pin_r, cx + pin_r, cy + pin_r, fill=self.clock_color, outline="")
+        # Clock minute hand
+        mx = cx + (plate_r * 0.70) * math.cos(math.radians(-30))
+        my = cy + (plate_r * 0.70) * math.sin(math.radians(-30))
+        self.create_line(cx, cy, mx, my, fill=accent_color, width=5, capstyle="round")
+        
+        # Volumetric Glass Sheen layers
+        self.create_arc(cx - plate_r + 6, cy - plate_r + 6, cx + plate_r - 6, cy + plate_r - 6,
+                        start=50, extent=80, style="arc", outline="#FFFFFF", width=3.0)
+        self.create_arc(cx - plate_r + 8, cy - plate_r + 8, cx + plate_r - 8, cy + plate_r - 8,
+                        start=230, extent=80, style="arc", outline=accent_color, width=2.0)
+        
+        # Center dot pin
+        self.create_oval(cx - 6, cy - 6, cx + 6, cy + 6, fill=accent_color, outline="")
 
 
 class CTkToolTip:
@@ -1444,10 +1539,10 @@ class TimerApp:
         label_font = ctk.CTkFont(family="Segoe UI", size=13, weight="bold")
         info_font = ctk.CTkFont(family="Segoe UI", size=12)
         
-        # Main flat deep slate container (translucent looking #111827)
+        # Main flat deep slate container (translucent looking transparent)
         self.main_container = ctk.CTkFrame(
             self.root,
-            fg_color="#111827",
+            fg_color="transparent",
             corner_radius=0
         )
         self.main_container.pack(fill="both", expand=True, padx=0, pady=0)
