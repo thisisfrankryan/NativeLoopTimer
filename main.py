@@ -1652,6 +1652,14 @@ class TimerApp:
         )
         self.task_list_frame.pack(fill="both", expand=True, pady=0)
         
+        # Style the scrollbar to be highly visible and premium
+        self.task_list_frame._scrollbar.configure(
+            width=14,
+            button_color="#475569",
+            button_hover_color="#3B82F6",
+            fg_color="#1E293B"
+        )
+        
         # Bind canvas configuration to auto-adjust grid layout columns and scrollbar dynamically
         self.task_list_frame._parent_canvas.bind(
             "<Configure>", 
@@ -2235,17 +2243,22 @@ class TimerApp:
 
     def adjust_scrollbar_visibility(self):
         try:
-            canvas = self.task_list_frame._parent_canvas
             scrollbar = self.task_list_frame._scrollbar
-            canvas.update_idletasks()
-            bbox = canvas.bbox("all")
-            if bbox:
-                content_height = bbox[3] - bbox[1]
-                canvas_height = canvas.winfo_height()
-                if content_height <= canvas_height:
-                    scrollbar.grid_forget()
-                else:
-                    scrollbar.grid(row=0, column=1, sticky="ns", padx=(self.task_list_frame._scrollbar_padx, 0))
+            if self.current_folder is not None:
+                # Always show the scrollbar in task list view to allow fast scrolling and positioning
+                scrollbar.grid(row=0, column=1, sticky="ns", padx=(self.task_list_frame._scrollbar_padx, 0))
+            else:
+                # Hide in folder directory view if contents fit, or standard check
+                canvas = self.task_list_frame._parent_canvas
+                canvas.update_idletasks()
+                bbox = canvas.bbox("all")
+                if bbox:
+                    content_height = bbox[3] - bbox[1]
+                    canvas_height = canvas.winfo_height()
+                    if content_height <= canvas_height:
+                        scrollbar.grid_forget()
+                    else:
+                        scrollbar.grid(row=0, column=1, sticky="ns", padx=(self.task_list_frame._scrollbar_padx, 0))
         except Exception as e:
             print(f"[Scrollbar] Error adjusting scrollbar: {e}")
 
