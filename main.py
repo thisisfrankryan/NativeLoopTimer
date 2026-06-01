@@ -2246,7 +2246,7 @@ class TimerApp:
             scrollbar = self.task_list_frame._scrollbar
             if self.current_folder is not None:
                 # Always show the scrollbar in task list view to allow fast scrolling and positioning
-                scrollbar.grid(row=0, column=1, sticky="ns", padx=(self.task_list_frame._scrollbar_padx, 0))
+                scrollbar.grid(row=1, column=1, sticky="ns", padx=(self.task_list_frame._scrollbar_padx, 0))
             else:
                 # Hide in folder directory view if contents fit, or standard check
                 canvas = self.task_list_frame._parent_canvas
@@ -2258,7 +2258,7 @@ class TimerApp:
                     if content_height <= canvas_height:
                         scrollbar.grid_forget()
                     else:
-                        scrollbar.grid(row=0, column=1, sticky="ns", padx=(self.task_list_frame._scrollbar_padx, 0))
+                        scrollbar.grid(row=1, column=1, sticky="ns", padx=(self.task_list_frame._scrollbar_padx, 0))
         except Exception as e:
             print(f"[Scrollbar] Error adjusting scrollbar: {e}")
 
@@ -2324,10 +2324,12 @@ class TimerApp:
         if self.current_folder is None:
             # Layout Folder Cards
             cols = 2 if width >= 580 else 1
+            inner_children = self.task_list_frame._parent_canvas.winfo_children()
+            inner_frame = inner_children[0] if inner_children else self.task_list_frame
             for c in range(10):
-                self.task_list_frame.grid_columnconfigure(c, weight=0, minsize=0)
+                inner_frame.grid_columnconfigure(c, weight=0, minsize=0)
             for c in range(cols):
-                self.task_list_frame.grid_columnconfigure(c, weight=1, minsize=260)
+                inner_frame.grid_columnconfigure(c, weight=1, minsize=260)
                 
             grps = self.get_all_group_names()
             for idx, gname in enumerate(grps):
@@ -2356,10 +2358,12 @@ class TimerApp:
             else:
                 tasks_copy = sorted(tasks_copy, key=lambda t: (t.get("is_paused", False), float(t.get("order", t.get("created_at", 0)))))
             
+            inner_children = self.task_list_frame._parent_canvas.winfo_children()
+            inner_frame = inner_children[0] if inner_children else self.task_list_frame
             for c in range(10):
-                self.task_list_frame.grid_columnconfigure(c, weight=0, minsize=0)
+                inner_frame.grid_columnconfigure(c, weight=0, minsize=0)
             for c in range(cols):
-                self.task_list_frame.grid_columnconfigure(c, weight=1, minsize=320)
+                inner_frame.grid_columnconfigure(c, weight=1, minsize=320)
                 
             # Make sure header frame spans correct columns
             for child in self.task_list_frame.winfo_children():
@@ -2654,10 +2658,12 @@ class TimerApp:
             width = self.task_list_frame._parent_canvas.winfo_width()
             cols = 2 if width >= 580 else 1
             
+            inner_children = self.task_list_frame._parent_canvas.winfo_children()
+            inner_frame = inner_children[0] if inner_children else self.task_list_frame
             for c in range(10):
-                self.task_list_frame.grid_columnconfigure(c, weight=0, minsize=0)
+                inner_frame.grid_columnconfigure(c, weight=0, minsize=0)
             for c in range(cols):
-                self.task_list_frame.grid_columnconfigure(c, weight=1, minsize=260)
+                inner_frame.grid_columnconfigure(c, weight=1, minsize=260)
                 
             for idx, gname in enumerate(grps):
                 g_tasks = [t for t in tasks_copy if t.get("group") == gname]
