@@ -179,7 +179,6 @@ class CTkCircularTimer(tk.Canvas):
             
             # 2. 🌊 Underlay Wave: Deeper, slower cosine wave for volumetric depth
             coords_deep = []
-            coords_deep.extend([left_x, cy + inner_max_r])
             for x in range(left_x, right_x + 1):
                 x_rel = x - cx
                 y_boundary = math.sqrt(max(0.0, inner_max_r**2 - x_rel**2))
@@ -187,12 +186,17 @@ class CTkCircularTimer(tk.Canvas):
                 wave_y = 5.0 * math.cos((x_rel / inner_max_r * 2 * math.pi) - phase) + liquid_h + 3.0
                 clamped_y = max(cy - y_boundary, min(cy + y_boundary, wave_y))
                 coords_deep.extend([x, clamped_y])
-            coords_deep.extend([right_x, cy + inner_max_r])
+            
+            # Close by tracing back along the bottom circular boundary arc
+            for x in range(right_x, left_x - 1, -1):
+                x_rel = x - cx
+                y_boundary = math.sqrt(max(0.0, inner_max_r**2 - x_rel**2))
+                coords_deep.extend([x, cy + y_boundary])
+                
             self.create_polygon(coords_deep, fill=fill_color, outline="")
 
             # 3. 🌊 Overlay Wave: Active, faster sine wave representing foreground fluid
             coords_active = []
-            coords_active.extend([left_x, cy + inner_max_r])
             for x in range(left_x, right_x + 1):
                 x_rel = x - cx
                 y_boundary = math.sqrt(max(0.0, inner_max_r**2 - x_rel**2))
@@ -200,7 +204,13 @@ class CTkCircularTimer(tk.Canvas):
                 wave_y = 7.0 * math.sin((x_rel / inner_max_r * 2 * math.pi) + phase) + liquid_h
                 clamped_y = max(cy - y_boundary, min(cy + y_boundary, wave_y))
                 coords_active.extend([x, clamped_y])
-            coords_active.extend([right_x, cy + inner_max_r])
+            
+            # Close by tracing back along the bottom circular boundary arc
+            for x in range(right_x, left_x - 1, -1):
+                x_rel = x - cx
+                y_boundary = math.sqrt(max(0.0, inner_max_r**2 - x_rel**2))
+                coords_active.extend([x, cy + y_boundary])
+                
             self.create_polygon(coords_active, fill=light_wave, outline="")
 
         # 4. 🥛 Translucent blurred glass plate overlay (Behind clock text for readability)
@@ -2777,14 +2787,13 @@ class TimerApp:
             status_dot.grid(row=0, column=0, padx=(12, 4), pady=(12, 4), sticky="w")
             self.task_status_badges[task_id] = status_dot
             
-            # Type Label (directly in grid column 1)
-            type_text = self.loc[lang]["tab_timer"] if task["type"] == "timer" else self.loc[lang]["tab_alarm"]
+            # Type Label (directly in grid column 1) - optimized to show only the group folder name to prevent truncation
             grp_name = task.get("group", self.loc[lang]["group_default"])
-            if len(grp_name) > 12:
-                grp_short = grp_name[:10] + "..."
+            if len(grp_name) > 20:
+                grp_short = grp_name[:18] + "..."
             else:
                 grp_short = grp_name
-            type_display = f"{type_text} • {grp_short}"
+            type_display = f"📁 {grp_short}"
             
             type_label = ctk.CTkLabel(
                 card,
