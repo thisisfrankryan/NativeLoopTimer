@@ -723,6 +723,7 @@ class TimerApp:
                 "tip_delete": "删除任务",
                 "tip_rename": "重命名分组",
                 "tip_back": "返回",
+                "tip_drag": "长按并拖拽以排序",
                 "tip_lang": "切换语言 (Toggle Language)",
                 "tip_pip": "画中画模式 (PiP Mode)",
                 "view_all_tasks": "🔍 查看全部任务",
@@ -800,6 +801,7 @@ class TimerApp:
                 "tip_delete": "Delete Task",
                 "tip_rename": "Rename Group",
                 "tip_back": "Back",
+                "tip_drag": "Hold and drag to sort",
                 "tip_lang": "Toggle Language",
                 "tip_pip": "PiP Mode",
                 "view_all_tasks": "🔍 View All Tasks",
@@ -909,6 +911,7 @@ class TimerApp:
                     task["is_paused"] = bool(task.get("is_paused", False))
                     task["sound_path"] = str(task.get("sound_path", "C:/Windows/Media/Windows Default.wav"))
                     task["group"] = str(task.get("group", self.loc[self.current_lang]["group_default"]))
+                    task["order"] = float(task.get("order", float(task.get("created_at", time.time()))))
                     if task["type"] == "timer":
                         task["duration_minutes"] = float(task.get("duration_minutes", 20.0))
                         task["is_auto_loop"] = bool(task.get("is_auto_loop", True))
@@ -2252,6 +2255,53 @@ class TimerApp:
             self._last_list_width = new_width
             self.root.after(50, self.relayout_task_cards)
 
+    def start_drag(self, event, task_id):
+        self.drag_task_id = task_id
+        self.is_dragging = True
+        card = self.task_card_widgets.get(task_id)
+        if card and card.winfo_exists():
+            card.configure(border_color="#3B82F6", border_width=2)
+
+    def drag_motion(self, event):
+        if not hasattr(self, "drag_task_id") or not self.drag_task_id:
+            return
+            
+        # Find which card is under the mouse pointer
+        widget = self.task_list_frame.winfo_containing(event.x_root, event.y_root)
+        target_task_id = None
+        while widget:
+            for tid, card in self.task_card_widgets.items():
+                if widget == card:
+                    target_task_id = tid
+                    break
+            if target_task_id:
+                break
+            widget = widget.master
+            
+        if target_task_id and target_task_id != self.drag_task_id:
+            # Swap their order fields in self.tasks
+            with self.lock:
+                task1 = next((t for t in self.tasks if t["id"] == self.drag_task_id), None)
+                task2 = next((t for t in self.tasks if t["id"] == target_task_id), None)
+                if task1 and task2:
+                    o1 = float(task1.get("order", task1.get("created_at", 0)))
+                    o2 = float(task2.get("order", task2.get("created_at", 0)))
+                    task1["order"] = o2
+                    task2["order"] = o1
+            
+            # Immediately save and relayout
+            self.save_config()
+            self.relayout_task_cards()
+
+    def stop_drag(self, event, task_id):
+        self.is_dragging = False
+        card = self.task_card_widgets.get(task_id)
+        if card and card.winfo_exists():
+            card.configure(border_color="#334155", border_width=1)
+        self.drag_task_id = None
+        self.save_config()
+        self.relayout_task_cards()
+
     def relayout_task_cards(self):
         if not self.root or not self.root.winfo_exists():
             return
@@ -2289,9 +2339,9 @@ class TimerApp:
                 tasks_copy = list(self.tasks)
             if self.current_folder != "__all_tasks__":
                 tasks_copy = [t for t in tasks_copy if t.get("group") == self.current_folder]
-                tasks_copy = sorted(tasks_copy, key=lambda t: t.get("created_at", 0))
+                tasks_copy = sorted(tasks_copy, key=lambda t: float(t.get("order", t.get("created_at", 0))))
             else:
-                tasks_copy = sorted(tasks_copy, key=lambda t: (t.get("is_paused", False), t.get("created_at", 0)))
+                tasks_copy = sorted(tasks_copy, key=lambda t: (t.get("is_paused", False), float(t.get("order", t.get("created_at", 0)))))
             
             for c in range(10):
                 self.task_list_frame.grid_columnconfigure(c, weight=0, minsize=0)
@@ -2350,6 +2400,7 @@ class TimerApp:
                 "is_auto_loop": is_loop,
                 "is_paused": False,
                 "created_at": time.time(),
+                "order": time.time(),
                 "target_time": time.time() + (minutes * 60.0),
                 "remaining_seconds": minutes * 60.0,
                 "sound_path": sound_path,
@@ -2382,7 +2433,8 @@ class TimerApp:
                 "target_time": target_epoch,
                 "sound_path": sound_path,
                 "group": grp_str,
-                "created_at": time.time()
+                "created_at": time.time(),
+                "order": time.time()
             }
             
         with self.lock:
@@ -2811,6 +2863,24 @@ class TimerApp:
             # Control Buttons Frame on the right side of the header
             btn_frame = ctk.CTkFrame(right_col_frame, fg_color="transparent")
             btn_frame.pack(side="top", anchor="e")
+            
+            # Drag-Reorder Icon trigger
+            drag_btn = ctk.CTkButton(
+                btn_frame,
+                text="⇅",
+                width=28,
+                height=28,
+                fg_color="#374151",
+                hover_color="#3B82F6",
+                corner_radius=6,
+                font=("Segoe UI", 12, "bold"),
+                cursor="fleur"
+            )
+            drag_btn.pack(side="left", padx=2)
+            drag_btn.bind("<ButtonPress-1>", lambda e, tid=task_id: self.start_drag(e, tid))
+            drag_btn.bind("<B1-Motion>", lambda e: self.drag_motion(e))
+            drag_btn.bind("<ButtonRelease-1>", lambda e, tid=task_id: self.stop_drag(e, tid))
+            CTkToolTip(drag_btn, self.loc[lang]["tip_drag"])
             
             # Play/Pause Icon trigger
             btn_text = "⏸" if not task["is_paused"] else "▶"
