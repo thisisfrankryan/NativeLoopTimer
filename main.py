@@ -1806,7 +1806,7 @@ class TimerApp:
         # Key bindings for auto-tabbing and keyboard focus management
         self.alarm_hour_entry.bind("<KeyRelease>", self.on_hour_keyrelease)
         self.alarm_hour_entry.bind("<KeyPress>", self.on_hour_keypress)
-        self.alarm_hour_entry.bind("<KeyPress>", self.on_minute_keypress)
+        self.alarm_minute_entry.bind("<KeyPress>", self.on_minute_keypress)
         self.alarm_hour_entry.bind("<Return>", lambda e: self.on_start_clicked())
         self.alarm_minute_entry.bind("<Return>", lambda e: self.on_start_clicked())
         

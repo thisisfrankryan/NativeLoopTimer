@@ -1,5 +1,5 @@
 name: native_loop_timer
-description: "A modern Fluent UI Flutter frontend for NativeLoopTimer featuring lightweight daemon modes."
+description: "A Flutter multi-task frontend for NativeLoopTimer backed by a local Python IPC service."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,9 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
-  # Fluent-style desktop component libraries
-  fluent_ui: ^4.8.2
   
   # Window management and system tray integration
   window_manager: ^0.3.8

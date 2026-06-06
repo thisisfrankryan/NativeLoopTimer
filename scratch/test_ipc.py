@@ -1,101 +1,156 @@
-import subprocess
 import json
-import time
-import sys
 import os
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
 
-def read_until_state(process, key, expected_value, timeout=2.0):
-    start = time.time()
-    while time.time() - start < timeout:
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_BACKEND = ROOT / "backend.py"
+
+
+def _backend_command():
+    override = os.environ.get("NATIVE_LOOP_TIMER_TEST_BACKEND")
+    if override:
+        return [override]
+    return [sys.executable, str(DEFAULT_BACKEND)]
+
+
+def _read_packet(process, timeout=5.0, request_id=None, event=None):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
         line = process.stdout.readline()
         if not line:
-            break
-        try:
-            status = json.loads(line.strip())
-            if status.get(key) == expected_value:
-                return status
-        except json.JSONDecodeError:
-            pass
-    raise TimeoutError(f"Timed out waiting for state {key} == {expected_value}")
+            continue
+        packet = json.loads(line)
+        if request_id is not None and packet.get("requestId") != request_id:
+            continue
+        if event is not None and packet.get("event") != event:
+            continue
+        return packet
+    raise TimeoutError(f"Timed out waiting for request_id={request_id!r}, event={event!r}")
+
+
+def _send(process, command, payload=None, request_id=None):
+    request_id = request_id or command
+    packet = {"command": command, "requestId": request_id}
+    if payload is not None:
+        packet["payload"] = payload
+    process.stdin.write(json.dumps(packet, ensure_ascii=False) + "\n")
+    process.stdin.flush()
+    return request_id
+
+
+def _state_for(process, command, payload=None, request_id=None):
+    rid = _send(process, command, payload, request_id)
+    return _read_packet(process, request_id=rid, event="stateSnapshot")
+
+
+def _task(snapshot, task_id):
+    for task in snapshot["tasks"]:
+        if task["id"] == task_id:
+            return task
+    raise AssertionError(f"Task {task_id} not present in snapshot")
+
 
 def run_ipc_test():
-    print("=== Starting IPC Pipe Verification Test ===")
-    
-    # Path to backend.py
-    backend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend.py")
-    
-    # Spawn Python subprocess with pipe redirections
-    process = subprocess.Popen(
-        [sys.executable, backend_path],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1
-    )
-    
-    try:
-        # 1. Send start timer command (duration 5 seconds)
-        print("Sending: start timer for 5 seconds...")
-        cmd_start = {"action": "start", "duration": 5}
-        process.stdin.write(json.dumps(cmd_start) + "\n")
-        process.stdin.flush()
-        
-        # Verify timer is running
-        status = read_until_state(process, "is_paused", False)
-        print(f"Verified Running tick: {status}")
-        assert status["status"] == "tick"
-        assert status["remaining"] <= 5
-        
-        # 2. Send pause command
-        print("Sending: pause...")
-        cmd_pause = {"action": "pause"}
-        process.stdin.write(json.dumps(cmd_pause) + "\n")
-        process.stdin.flush()
-        
-        # Verify timer pauses
-        status = read_until_state(process, "is_paused", True)
-        print(f"Verified Paused tick: {status}")
-        paused_remaining = status["remaining"]
-        
-        # Verify that remaining time stays frozen
-        time.sleep(0.8)
-        line = process.stdout.readline()
-        status = json.loads(line.strip())
-        print(f"Verified Frozen check tick: {status}")
-        assert status["remaining"] == paused_remaining
-        
-        # 3. Send resume command
-        print("Sending: resume...")
-        cmd_resume = {"action": "resume"}
-        process.stdin.write(json.dumps(cmd_resume) + "\n")
-        process.stdin.flush()
-        
-        # Verify timer resumes
-        status = read_until_state(process, "is_paused", False)
-        print(f"Verified Resumed tick: {status}")
-        
-        # 4. Send stop command
-        print("Sending: stop...")
-        cmd_stop = {"action": "stop"}
-        process.stdin.write(json.dumps(cmd_stop) + "\n")
-        process.stdin.flush()
-        
-        print("Closing stdin pipe (Simulating parent process exit)...")
-        process.stdin.close()
-        
-        # Subprocess should immediately detect parent process death while stopped and exit gracefully
-        time.sleep(0.5)
-        exit_code = process.poll()
-        print(f"Subprocess exit code: {exit_code}")
-        assert exit_code == 0, f"Expected clean exit (0), got {exit_code}"
-        
-        print("[PASS] IPC Pipe Verification Test PASSED!")
-        
-    except Exception as e:
-        print(f"[FAIL] Test Failed: {e}")
-        process.kill()
-        sys.exit(1)
+    print("=== NativeLoopTimer backend IPC verification ===")
+    with tempfile.TemporaryDirectory(prefix="native_loop_timer_ipc_") as config_dir:
+        env = os.environ.copy()
+        env["NATIVE_LOOP_TIMER_CONFIG_DIR"] = config_dir
+        env["NATIVE_LOOP_TIMER_DISABLE_NOTIFY"] = "1"
+        env["NATIVE_LOOP_TIMER_DISABLE_POWER_MONITOR"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"
+
+        process = subprocess.Popen(
+            _backend_command(),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            bufsize=1,
+        )
+
+        try:
+            initial = _read_packet(process, event="stateSnapshot")
+            assert initial["tasks"] == []
+            assert initial["language"] == "zh"
+
+            created = _state_for(
+                process,
+                "createTask",
+                {
+                    "type": "timer",
+                    "name": "IPC Timer",
+                    "duration_minutes": 0.05,
+                    "is_auto_loop": False,
+                    "group": "Focus",
+                },
+                "create-timer",
+            )
+            assert len(created["tasks"]) == 1
+            timer_id = created["tasks"][0]["id"]
+            assert created["tasks"][0]["type"] == "timer"
+            assert created["tasks"][0]["is_paused"] is False
+
+            paused = _state_for(process, "pauseTask", {"id": timer_id}, "pause-timer")
+            assert _task(paused, timer_id)["is_paused"] is True
+            assert _task(paused, timer_id)["remaining_seconds"] > 0
+
+            resumed = _state_for(process, "resumeTask", {"id": timer_id}, "resume-timer")
+            assert _task(resumed, timer_id)["is_paused"] is False
+
+            reset = _state_for(process, "resetTask", {"id": timer_id}, "reset-timer")
+            assert 2.5 <= _task(reset, timer_id)["remaining_seconds"] <= 3.1
+
+            alarm_state = _state_for(
+                process,
+                "createTask",
+                {
+                    "type": "alarm",
+                    "name": "IPC Alarm",
+                    "alarm_time": "23:59",
+                    "repeat_days": [1, 2, 3],
+                    "group": "Focus",
+                },
+                "create-alarm",
+            )
+            assert len(alarm_state["tasks"]) == 2
+            alarm_id = next(task["id"] for task in alarm_state["tasks"] if task["type"] == "alarm")
+
+            reordered = _state_for(process, "reorderTasks", {"ids": [alarm_id, timer_id]}, "reorder")
+            assert _task(reordered, alarm_id)["order"] == 0.0
+            assert _task(reordered, timer_id)["order"] == 1.0
+
+            english = _state_for(process, "setLanguage", {"language": "en"}, "language")
+            assert english["language"] == "en"
+
+            deleted = _state_for(process, "deleteTask", {"id": timer_id}, "delete-timer")
+            assert len(deleted["tasks"]) == 1
+            assert deleted["tasks"][0]["id"] == alarm_id
+
+            _send(process, "shutdown", request_id="shutdown")
+            shutdown = _read_packet(process, request_id="shutdown", event="shutdown")
+            assert shutdown["event"] == "shutdown"
+            assert process.wait(timeout=5) == 0
+
+            config_path = Path(config_dir) / "config.json"
+            assert config_path.exists()
+            saved = json.loads(config_path.read_text(encoding="utf-8"))
+            assert saved["language"] == "en"
+            assert len(saved["tasks"]) == 1
+            print("[PASS] Backend IPC verification passed")
+        except Exception:
+            process.kill()
+            stderr = process.stderr.read() if process.stderr else ""
+            if stderr:
+                print(stderr)
+            raise
+
 
 if __name__ == "__main__":
     run_ipc_test()
