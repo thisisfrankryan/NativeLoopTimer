@@ -1552,10 +1552,7 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     _minuteController = TextEditingController(text: parts.length > 1 ? parts[1] : '30');
     _autoLoop = task?.isAutoLoop ?? true;
     _repeatDays = {...?task?.repeatDays};
-    _soundPath = task?.soundPath ??
-        (widget.soundOptions.isNotEmpty
-            ? widget.soundOptions.values.first
-            : 'C:/Windows/Media/Windows Default.wav');
+    _soundPath = task?.soundPath ?? _defaultSoundPath(widget.soundOptions);
   }
 
   @override
@@ -1566,6 +1563,19 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     _hourController.dispose();
     _minuteController.dispose();
     super.dispose();
+  }
+
+  String _defaultSoundPath(Map<String, String> soundOptions) {
+    return soundOptions.entries
+        .firstWhere(
+          (entry) =>
+              entry.key.toLowerCase().contains('warm ding') ||
+              entry.value.toLowerCase().endsWith('/ding.wav'),
+          orElse: () => soundOptions.entries.isNotEmpty
+              ? soundOptions.entries.first
+              : const MapEntry('', 'C:/Windows/Media/ding.wav'),
+        )
+        .value;
   }
 
   @override

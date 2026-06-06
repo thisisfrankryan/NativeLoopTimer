@@ -814,19 +814,17 @@ class TimerApp:
         # Bilingual sound selections mapped to high-quality Windows pre-installed media chimes
         self.sound_options = {
             "zh": {
-                "🔔 经典闹铃 (Classic Alarm)": "C:/Windows/Media/Alarm01.wav",
+                "🔔 温馨叮咚 (Warm Ding)": "C:/Windows/Media/ding.wav",
                 "🔔 晨光风铃 (Morning Chimes)": "C:/Windows/Media/chimes.wav",
                 "🔔 静谧和弦 (Serene Chord)": "C:/Windows/Media/chord.wav",
-                "🔔 温馨叮咚 (Warm Ding)": "C:/Windows/Media/ding.wav",
                 "🔔 凯旋之声 (Tada Fanfare)": "C:/Windows/Media/tada.wav",
                 "🔔 电子警报 (Digital Alarm)": "C:/Windows/Media/Alarm03.wav",
                 "🔔 系统默认 (System Default)": "C:/Windows/Media/Windows Default.wav"
             },
             "en": {
-                "🔔 Classic Alarm": "C:/Windows/Media/Alarm01.wav",
+                "🔔 Warm Ding": "C:/Windows/Media/ding.wav",
                 "🔔 Morning Chimes": "C:/Windows/Media/chimes.wav",
                 "🔔 Serene Chord": "C:/Windows/Media/chord.wav",
-                "🔔 Warm Ding": "C:/Windows/Media/ding.wav",
                 "🔔 Tada Fanfare": "C:/Windows/Media/tada.wav",
                 "🔔 Digital Alarm": "C:/Windows/Media/Alarm03.wav",
                 "🔔 System Default": "C:/Windows/Media/Windows Default.wav"

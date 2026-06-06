@@ -5,6 +5,45 @@
 #include "flutter_window.h"
 #include "utils.h"
 
+namespace {
+
+constexpr const wchar_t kSingleInstanceMutex[] =
+    L"Local\\NativeLoopTimer.SingleInstance";
+constexpr const wchar_t kMainWindowClassName[] =
+    L"NativeLoopTimer_FLUTTER_RUNNER_WIN32_WINDOW";
+constexpr const wchar_t kMainWindowTitle[] = L"NativeLoopTimer";
+
+BOOL CALLBACK BringWindowToFront(HWND hwnd, LPARAM lparam) {
+  wchar_t class_name[128] = {};
+  GetClassName(hwnd, class_name, 128);
+  if (wcscmp(class_name, kMainWindowClassName) != 0) {
+    return TRUE;
+  }
+
+  wchar_t title[128] = {};
+  GetWindowText(hwnd, title, 128);
+  if (wcscmp(title, kMainWindowTitle) != 0) {
+    return TRUE;
+  }
+
+  if (IsIconic(hwnd)) {
+    ShowWindow(hwnd, SW_RESTORE);
+  } else {
+    ShowWindow(hwnd, SW_SHOWNORMAL);
+  }
+  SetForegroundWindow(hwnd);
+  *reinterpret_cast<bool*>(lparam) = true;
+  return FALSE;
+}
+
+bool ActivateExistingInstance() {
+  bool found = false;
+  EnumWindows(BringWindowToFront, reinterpret_cast<LPARAM>(&found));
+  return found;
+}
+
+}  // namespace
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
   // Attach to console when present (e.g., 'flutter run') or create a
@@ -17,6 +56,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
+  HANDLE single_instance_mutex =
+      CreateMutex(nullptr, TRUE, kSingleInstanceMutex);
+  if (single_instance_mutex == nullptr) {
+    ::CoUninitialize();
+    return EXIT_FAILURE;
+  }
+  if (GetLastError() == ERROR_ALREADY_EXISTS) {
+    ActivateExistingInstance();
+    CloseHandle(single_instance_mutex);
+    ::CoUninitialize();
+    return EXIT_SUCCESS;
+  }
+
   flutter::DartProject project(L"data");
 
   std::vector<std::string> command_line_arguments =
@@ -27,7 +79,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"native_loop_timer", origin, size)) {
+  if (!window.Create(kMainWindowTitle, origin, size)) {
+    CloseHandle(single_instance_mutex);
+    ::CoUninitialize();
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
@@ -39,5 +93,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   ::CoUninitialize();
+  CloseHandle(single_instance_mutex);
   return EXIT_SUCCESS;
 }
